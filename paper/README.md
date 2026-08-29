@@ -5,13 +5,19 @@ LaTeX source for the agent-tasks paper, targeting arXiv.
 ## Build
 
 ```bash
+make setup      # install the TeX toolchain (first time only)
 make            # main.pdf
 make watch      # rebuild on save
 make check      # fail if \todo or \note markers remain
 make arxiv      # arxiv.tar.gz, including the .bbl
 ```
 
-Requires a TeX Live distribution with `latexmk`.
+`make setup` installs a TeX Live subset via `apt` on Debian/Ubuntu, or MacTeX
+via Homebrew on macOS. On any other platform, install TeX Live yourself — the
+build needs `latexmk`, `pdflatex`, and `bibtex`. The build targets fail early
+with a pointer to `make setup` when the toolchain is missing.
+
+Verified against TeX Live 2023 on Ubuntu 24.04.
 
 ## Layout
 
