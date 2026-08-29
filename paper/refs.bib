@@ -1,0 +1,178 @@
+% ===========================================================================
+% VERIFY EVERY ENTRY BEFORE SUBMISSION.
+%
+% These are starter entries assembled from recollection. Years, venues, page
+% numbers, and author lists must each be checked against the actual
+% publication (DBLP or the ACM/USENIX digital library) before the paper goes
+% out. Do not trust them as written.
+%
+% Entries marked [UNVERIFIED] are ones to check first.
+% ===========================================================================
+
+% ---------------------------------------------------------------------------
+% Isolation
+% ---------------------------------------------------------------------------
+
+@inproceedings{agache2020firecracker,
+  author    = {Agache, Alexandru and Brooker, Marc and Iordache, Andreea and
+               Liguori, Anthony and Neugebauer, Rolf and Piwonka, Phil and
+               Popa, Diana-Maria},
+  title     = {Firecracker: Lightweight Virtualization for Serverless
+               Applications},
+  booktitle = {17th USENIX Symposium on Networked Systems Design and
+               Implementation (NSDI)},
+  year      = {2020},
+  note      = {[UNVERIFIED] check page numbers and author list}
+}
+
+@misc{gvisor,
+  title        = {gVisor: Application Kernel for Containers},
+  howpublished = {\url{https://gvisor.dev}},
+  note         = {Accessed: TODO}
+}
+
+@misc{kata,
+  title        = {Kata Containers},
+  howpublished = {\url{https://katacontainers.io}},
+  note         = {Accessed: TODO}
+}
+
+@misc{agentsandbox,
+  author       = {{Kubernetes SIG Apps}},
+  title        = {agent-sandbox: Declarative Sandbox Management for
+                  Kubernetes},
+  howpublished = {\url{https://github.com/kubernetes-sigs/agent-sandbox}},
+  note         = {Apache-2.0. Accessed: TODO}
+}
+
+% ---------------------------------------------------------------------------
+% Build systems -- our lineage
+% ---------------------------------------------------------------------------
+
+@article{mokhov2018build,
+  author  = {Mokhov, Andrey and Mitchell, Neil and Peyton Jones, Simon},
+  title   = {Build Systems \`a la Carte},
+  journal = {Proceedings of the ACM on Programming Languages (ICFP)},
+  year    = {2018},
+  note    = {[UNVERIFIED] check volume, issue, article number}
+}
+
+@article{feldman1979make,
+  author  = {Feldman, Stuart I.},
+  title   = {Make --- A Program for Maintaining Computer Programs},
+  journal = {Software: Practice and Experience},
+  volume  = {9},
+  number  = {4},
+  year    = {1979},
+  note    = {[UNVERIFIED] check pages}
+}
+
+@inproceedings{dolstra2004nix,
+  author    = {Dolstra, Eelco and de Jonge, Merijn and Visser, Eelco},
+  title     = {Nix: A Safe and Policy-Free System for Software Deployment},
+  booktitle = {18th Large Installation System Administration Conference
+               (LISA)},
+  year      = {2004},
+  note      = {[UNVERIFIED] confirm author list and venue}
+}
+
+@misc{bazel,
+  title        = {Bazel: A Fast, Scalable, Multi-language Build System},
+  howpublished = {\url{https://bazel.build}},
+  note         = {Accessed: TODO}
+}
+
+% ---------------------------------------------------------------------------
+% Workflow engines
+% ---------------------------------------------------------------------------
+
+@misc{argoworkflows,
+  title        = {Argo Workflows: Kubernetes-native Workflow Engine},
+  howpublished = {\url{https://argoproj.github.io/workflows/}},
+  note         = {Accessed: TODO}
+}
+
+@misc{tekton,
+  title        = {Tekton Pipelines},
+  howpublished = {\url{https://tekton.dev}},
+  note         = {Accessed: TODO}
+}
+
+@misc{temporal,
+  title        = {Temporal: Durable Execution},
+  howpublished = {\url{https://temporal.io}},
+  note         = {Accessed: TODO}
+}
+
+% ---------------------------------------------------------------------------
+% Cluster management
+% ---------------------------------------------------------------------------
+
+@inproceedings{verma2015borg,
+  author    = {Verma, Abhishek and Pedrosa, Luis and Korupolu, Madhukar and
+               Oppenheimer, David and Tune, Eric and Wilkes, John},
+  title     = {Large-scale Cluster Management at Google with Borg},
+  booktitle = {Proceedings of the Tenth European Conference on Computer
+               Systems (EuroSys)},
+  year      = {2015},
+  note      = {[UNVERIFIED] check pages}
+}
+
+@misc{kueue,
+  author       = {{Kubernetes SIG Scheduling}},
+  title        = {Kueue: Kubernetes-native Job Queueing},
+  howpublished = {\url{https://kueue.sigs.k8s.io}},
+  note         = {Accessed: TODO}
+}
+
+% ---------------------------------------------------------------------------
+% Agents and benchmarks
+% ---------------------------------------------------------------------------
+
+@inproceedings{jimenez2024swebench,
+  author    = {Jimenez, Carlos E. and Yang, John and Wettig, Alexander and
+               Yao, Shunyu and Pei, Kexin and Press, Ofir and
+               Narasimhan, Karthik},
+  title     = {{SWE-bench}: Can Language Models Resolve Real-World GitHub
+               Issues?},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  note      = {[UNVERIFIED] confirm author list}
+}
+
+@inproceedings{yang2024sweagent,
+  author    = {Yang, John and Jimenez, Carlos E. and Wettig, Alexander and
+               Lieret, Kilian and Yao, Shunyu and Narasimhan, Karthik and
+               Press, Ofir},
+  title     = {{SWE-agent}: Agent-Computer Interfaces Enable Automated
+               Software Engineering},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2024},
+  note      = {[UNVERIFIED] confirm venue and year}
+}
+
+@misc{wang2024openhands,
+  author = {Wang, Xingyao and others},
+  title  = {{OpenHands}: An Open Platform for AI Software Developers as
+            Generalist Agents},
+  year   = {2024},
+  note   = {[UNVERIFIED] arXiv preprint; fill eprint ID and full author list}
+}
+
+@misc{langgraph,
+  title        = {LangGraph},
+  howpublished = {\url{https://langchain-ai.github.io/langgraph/}},
+  note         = {Accessed: TODO}
+}
+
+% ---------------------------------------------------------------------------
+% This work
+% ---------------------------------------------------------------------------
+
+@misc{agenttasks,
+  author       = {{Primitive}},
+  title        = {agent-tasks: Kubernetes-native Task Orchestration for
+                  Autonomous Coding Agents},
+  howpublished = {\url{https://github.com/primitivecorp/agent-tasks}},
+  note         = {Apache-2.0}
+}

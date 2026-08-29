@@ -1,0 +1,48 @@
+\section{Threat Model}
+\label{sec:threat}
+
+% 2-3 pages. Most novel material in the paper. Consider cross-listing cs.CR.
+
+\subsection{Trust boundaries}
+% What kernel isolation buys: protection of the host kernel and the rest of the
+% cluster from an escaping agent.
+% What it does NOT buy: protection from anything deliberately granted. In
+% practice, damage looks like correct use of granted authority -- force-push
+% over main, dropping a table believed to be a fixture, rewriting a CI workflow,
+% exfiltration through an allowed egress path.
+
+\subsection{Gate-gaming}
+% The agent will make gates pass by disabling them. Not maliciously: it is the
+% locally optimal move. Enumerate: noqa, type-ignore, eslint-disable, skip
+% markers, deleted assertions, ignore-file additions, lowered thresholds,
+% --no-verify.
+% The suppression meta-gate: runs on the DIFF, not the tree. Rejects gate-config
+% modification, net-new suppressions, test deletion, assertion-count decrease,
+% gate binary/version changes.
+
+\subsection{Best-of-N as adversarial selection pressure}
+% KEY INSIGHT. With N=1 you get an agent that occasionally games a gate. With
+% N=5 you explicitly SELECT the candidate that gamed most effectively, because
+% gaming is the cheapest path to green.
+% Therefore the meta-gate must run BEFORE ranking, and trip => disqualify, not
+% penalise. Note that a "smaller diff" tiebreak makes this worse in isolation:
+% a type-ignore comment is a very small diff.
+
+\subsection{Confused deputy}
+% Co-located tool pods launder egress: CDP on a browser pod is arbitrary code
+% execution against a less-isolated peer; a credential-holding git pod is worse.
+% CI is the sharpest edge: an agent that can modify workflow definitions runs
+% code on trusted infrastructure with trusted credentials, and the microVM is
+% irrelevant at that point.
+% IMDS: cloud metadata endpoints must be unreachable at both the policy layer
+% and the instance-metadata-options layer.
+
+\subsection{Capability scoping}
+% Tools expose intent-level APIs, not raw protocol access.
+% The credential never enters the sandbox: the agent commits locally and the
+% broker PULLS, so a compromised sandbox has nothing to steal.
+% Repo-scoped, short-lived tokens with minimal permissions.
+
+\subsection{Residual risks}
+% Be honest. Post-merge validation (Section 12) is the external check that
+% gaming cannot reach, but it is sampled, not exhaustive.

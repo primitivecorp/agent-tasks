@@ -1,0 +1,35 @@
+\section{The Verification Ledger}
+\label{sec:ledger}
+
+% 3-4 pages. THE core section. Write this first, or second after Section 2.
+
+\subsection{Definitions}
+% Tree hash h: content hash of the workspace at a point in time.
+% Gate g: a deterministic predicate over a tree, producing pass/fail + evidence.
+% Ledger L: partial function (g, h) -> {pass, fail(e)}.
+% Formalise. Consider a \begin{definition} block per item.
+
+\subsection{Path-scoped invalidation}
+% Each gate declares invalidatedBy: a set of path globs.
+% On an edit producing h' from h, gate g retains its result iff
+%   diff(h, h') INTERSECT invalidatedBy(g) = empty set.
+% Corollary worth stating: a rebase is just another tree change, so a rebase
+% carrying an unrelated diff does not invalidate unrelated gates. This is what
+% makes high monorepo concurrency affordable.
+
+\subsection{\nextaction as a pure function}
+% Include the pseudocode. Emphasise: no Kubernetes dependency, no I/O,
+% unit-testable against a synthetic ledger. Cost-ordered, fail-fast.
+% Autofix attempted before spending an agent turn.
+
+\subsection{Termination}
+% Fixed point: all gates green against a SINGLE tree hash.
+% Oscillation: tree hash seen twice => cycle, break immediately.
+% Sliding-window per-gate attempt budget (not lifetime).
+% Global budgets: tokens, wall clock, expensive-gate runs.
+% Diff-size ratchet: monotonic growth with gates red => flailing, revert.
+% Consider a \begin{proposition} on termination under these conditions.
+
+\subsection{Comparison to one-shot execution}
+% Table from Section 3.2, expanded. This is where the reader should conclude
+% that a DAG engine cannot express this without becoming a ledger.

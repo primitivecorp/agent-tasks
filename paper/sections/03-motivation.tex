@@ -1,0 +1,28 @@
+\section{Motivation}
+\label{sec:motivation}
+
+% 2-3 pages.
+
+\subsection{Anatomy of the convergence loop}
+% Walk a real ticket: edit, lint, typecheck, unit, integration, review.
+% 50-200 edit-run cycles. Emphasise: the tree mutates between every gate run.
+
+\subsection{Why one-shot execution fails}
+% The core observation. A DAG engine node fires once when dependencies are
+% satisfied. A gate must fire repeatedly as the tree changes.
+% NOTE: do NOT frame this as "graphs vs DAGs" -- our dependency graph IS acyclic
+% and is webhook-enforced to be so. The contrast is EXECUTION SEMANTICS:
+%   one-shot topological execution  vs.  content-addressed level-triggered convergence.
+% Table: topology / trigger / node identity / completion criterion.
+
+\subsection{Why agent frameworks fail}
+% No kernel isolation, no capacity model, no multi-tenancy, no declarative
+% workflow surface, no tracker-neutral integration.
+
+\subsection{Requirements}
+% R1 verification results must be re-entrant and content-keyed
+% R2 invalidation must be path-scoped or cost grows superlinearly
+% R3 agent-authored artifacts must not run on shared kernels
+% R4 the agent must not be able to weaken its own verification
+% R5 capacity is finite and non-elastic at the isolation layer
+% R6 tracker integration must not leak into the core

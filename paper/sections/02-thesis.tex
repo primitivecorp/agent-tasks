@@ -1,0 +1,43 @@
+\section{The Specification-Only Organization}
+\label{sec:thesis}
+
+% ~1.5 pages. This is the load-bearing framing section. Write it early.
+
+% Thesis sentence (settled, refine wording):
+%   Autonomous agent systems scale not by removing human judgment but by
+%   relocating it from implementation review, which is O(agent output), to
+%   specification and post-merge intent validation, which is O(tickets).
+%   Verification density determines how much of the gap between those two the
+%   system can close autonomously.
+
+\subsection{Verification capacity as the bound}
+% At N=1 a human reviews every diff and review IS the trust mechanism.
+% At N=1000 that is arithmetically impossible. Trust must come from executable
+% verification. Gates are not CI hygiene; they are the substitute for attention.
+
+\subsection{Two checks, neither substitutable}
+% Gates verify correctness against specification.
+% Humans verify specification against intent.
+% Only the first is automatable. This division is the contribution's real shape.
+
+\subsection{Where the work goes}
+% Table: Product / QA / Engineer, before and after. Nobody writes application
+% code; everybody writes specification and verification. This is a relocation of
+% expertise, not a reduction -- state that explicitly to avoid overclaiming.
+
+\subsection{Verification compounds; review does not}
+% A human review does not accumulate. A gate, once written, applies to every
+% subsequent task forever. Findings become tests (see Section 12). This is the
+% mechanism by which trustworthiness compounds and N scales.
+
+\subsection{The autonomy dial}
+% Two knobs, per workflow, per risk class:
+%   escalationPolicy: Fail | Retry | Elicit    (default Fail -- asking does not scale)
+%   mergePolicy:      Manual | AutoOnGreen | AutoWithSampledAudit
+% Position on the dial is a function of measured verification density, not a
+% philosophical stance. Interactive mode is a workflow-development affordance.
+
+\subsection{Trust is purchased with compute}
+% Raising verification density multiplies compute across tasks x gates x
+% candidates. Verification is the CHEAP axis (elastic, shared-kernel) which is
+% why the substitution is economically viable at all. Forward-reference 8.6.
