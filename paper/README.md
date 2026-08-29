@@ -5,9 +5,13 @@ LaTeX source for the agent-tasks paper, targeting arXiv.
 ## Build
 
 ```bash
-make setup      # install the TeX toolchain (first time only)
+make setup      # install the toolchain (first time only)
 make            # main.pdf
 make watch      # rebuild on save
+make lint       # chktex over main.tex and sections/
+make fmt        # reformat in place with latexindent
+make fmt-check  # fail if anything is unformatted (does not modify)
+make verify     # lint + fmt-check + build; what CI should run
 make check      # fail if \todo or \note markers remain
 make arxiv      # arxiv.tar.gz, including the .bbl
 ```
@@ -18,6 +22,23 @@ build needs `latexmk`, `pdflatex`, and `bibtex`. The build targets fail early
 with a pointer to `make setup` when the toolchain is missing.
 
 Verified against TeX Live 2023 on Ubuntu 24.04.
+
+## Lint and formatting
+
+`make lint` runs ChkTeX. Project-wide exceptions live in `.chktexrc`, which
+appends to ChkTeX's defaults rather than replacing them. Two are recorded
+there: warning 24, which fires on the `\section{...}` / `\label{...}`
+convention used in every section file, and warning 1 for the `\xspace` macros
+defined in `main.tex`. Anything narrower belongs inline as `% chktex NN` on
+the offending line — `main.tex` has three.
+
+`make fmt` runs latexindent in place, configured by `.latexindent.yaml` to
+indent with two spaces rather than its default tab. It does not reflow
+paragraphs. `make fmt-check` reports what would change without touching
+anything, for CI.
+
+Keep `make verify` green. `make check` is separate and expected to fail while
+drafting, since it fails on any remaining `\todo` or `\note`.
 
 ## Layout
 

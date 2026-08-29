@@ -59,7 +59,7 @@
   sensitive=true,
   comment=[l]{\#},
   commentstyle=\color{lstcomment}\itshape,
-  morestring=[b]",
+  morestring=[b]", % chktex 18 (listings config, not prose)
   stringstyle=\color{lststring},
 }
 
@@ -102,8 +102,8 @@
 \newcommand{\ledger}{\ensuremath{\mathcal{L}}}
 
 % Drafting aids. Comment out the definitions below before submission.
-\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
-\newcommand{\note}[1]{\textcolor{blue}{\textbf{[NOTE: #1]}}}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}} % chktex 13
+\newcommand{\note}[1]{\textcolor{blue}{\textbf{[NOTE: #1]}}} % chktex 13
 % \renewcommand{\todo}[1]{}
 % \renewcommand{\note}[1]{}
 
@@ -132,7 +132,7 @@
 \maketitle
 
 \begin{abstract}
-\input{sections/00-abstract}
+  \input{sections/00-abstract}
 \end{abstract}
 
 \input{sections/01-introduction}

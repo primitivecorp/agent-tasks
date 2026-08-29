@@ -10,3 +10,5 @@
 *.pdf
 arxiv-build/
 arxiv.tar.gz
+.latexindent-cruft/
+indent.log
