@@ -1,0 +1,26 @@
+\section{Issue Tracker Integration}
+\label{sec:tracker}
+
+% 1-1.5 pages.
+
+\subsection{A provider-neutral status vocabulary}
+% status.plan, status.question, status.conditions render as a Linear agent plan,
+% a Jira checklist comment, or a GitHub task list.
+% Design rule: if a status field only makes sense because one tracker has a
+% corresponding concept, it belongs in the connector, not the core.
+
+\subsection{One-directional at both edges}
+% webhook -> connector -> AgentTask.spec
+% AgentTask.status -> connector (watch) -> tracker
+% The operator never calls the tracker. A connector crash is harmless: on
+% restart it re-projects from current status. No replay logic.
+
+\subsection{Webhook plus reconciling sweep}
+% Webhooks are lossy. The sweep is not hygiene -- it is what stops abandoned
+% work from holding scarce capacity. Drift cases: missed delegation, ticket
+% closed mid-run, delegation removed, failed projection.
+
+\subsection{Interactive mode}
+% Elicitation as a workflow-development affordance, not a core state. Default
+% escalation policy is Fail, because a system that scales by asking more
+% questions re-centralises the bottleneck it exists to remove.

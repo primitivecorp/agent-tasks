@@ -1,0 +1,26 @@
+\section{The Post-Merge Validation Loop}
+\label{sec:validation}
+
+% ~1.5 pages. This section carries the thesis empirically. Do not cut it.
+
+\subsection{Intent validation is above the gaming layer}
+% Gates verify correctness against specification; they are attackable by the
+% thing being gated. A human confirming "this does what the ticket asked" is not
+% reading the diff -- they are testing behaviour against the requirement.
+% Suppression comments and weakened assertions do not survive that check.
+% Crucially it is O(tickets), not O(agent-turns): a task that took 200 turns and
+% 3 candidates gets exactly one validation.
+
+\subsection{Failure is a normal outcome}
+% Post-merge validation failure must be as cheap and structured as a gate
+% failure: revert, new task carrying the finding, and -- the important part --
+% the finding becomes a gate so it cannot recur.
+
+\subsection{Compounding trust}
+% This loop is the mechanism by which the system becomes more trustworthy over
+% time. It is also what justifies raising a repo's position on the autonomy dial.
+
+\subsection{Sampled audit}
+% Audit k\% of auto-merged PRs; track the rate at which audits catch what gates
+% missed. Constant cost, not linear in task count. This is the empirical trust
+% measure and the basis for the mergePolicy decision.

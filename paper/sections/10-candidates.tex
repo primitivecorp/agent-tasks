@@ -1,0 +1,31 @@
+\section{Multi-Candidate Execution}
+\label{sec:candidates}
+
+% 1-1.5 pages. Merge into Section 6 if page budget is tight.
+
+\subsection{Diversity and failure independence}
+% Resampling at higher temperature is weak: same solution, different names.
+% Stronger: different strategy hints, different models, different context scope.
+% Fan-out only buys variance reduction. If candidates fail identically because
+% the mistake is implied by the prompt or the repo's existing patterns, N=3
+% costs 3x and catches nothing. This is measurable -- report the correlation.
+
+\subsection{Selection}
+% Gates filter; they do not rank. Tiebreak order:
+%   1. meta-gate clean (disqualifying, not penalising)
+%   2. no new dependencies
+%   3. smaller diff
+%   4. reviewer score
+
+\subsection{Why hunk-level composition fails}
+% "Take the best parts of each" fails on SEMANTIC conflict, not textual: three
+% diffs may all apply cleanly and produce something no agent understands.
+% It also voids the ledger -- the composed tree was validated by nobody.
+% What works instead: pick a winner, feed the losers' diffs as review input,
+% one agent integrates, gates re-run on a normal tree hash.
+
+\subsection{Fan out cheap, converge before expensive}
+% Fan out across phase-0 gates (in-sandbox, no catalog dependencies).
+% Converge to one candidate BEFORE provisioning stateful dependencies.
+% Reviewers and research agents need no sandbox at all -- they do not execute
+% code, so fanning them out costs tokens, not scarce isolation capacity.

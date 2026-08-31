@@ -1,0 +1,161 @@
+% arXiv requires \pdfoutput=1 within the first few lines when using pdflatex.
+\pdfoutput=1
+
+\documentclass[11pt]{article}
+
+% ---------------------------------------------------------------------------
+% Page and typography
+% ---------------------------------------------------------------------------
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{lmodern}
+
+% ---------------------------------------------------------------------------
+% Math, tables, figures
+% ---------------------------------------------------------------------------
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{array}
+
+% ---------------------------------------------------------------------------
+% Algorithms
+% ---------------------------------------------------------------------------
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% ---------------------------------------------------------------------------
+% Bibliography. natbib + bibtex is the safest choice for arXiv, which does not
+% run bibtex: you must upload the generated .bbl alongside the sources.
+% ---------------------------------------------------------------------------
+\usepackage[numbers,sort&compress]{natbib}
+\bibliographystyle{plainnat}
+
+% ---------------------------------------------------------------------------
+% Links and cross-references (hyperref last, cleveref after it)
+% ---------------------------------------------------------------------------
+\usepackage[hidelinks,breaklinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+% ---------------------------------------------------------------------------
+% Code listings, with a YAML dialect since listings has no built-in one
+% ---------------------------------------------------------------------------
+\usepackage{listings}
+
+\definecolor{lstkey}{HTML}{0B5394}
+\definecolor{lstcomment}{HTML}{6B7280}
+\definecolor{lststring}{HTML}{7A3E9D}
+\definecolor{lstbg}{HTML}{F7F7F8}
+
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null,apiVersion,kind,metadata,spec,status},
+  keywordstyle=\color{lstkey}\bfseries,
+  sensitive=true,
+  comment=[l]{\#},
+  commentstyle=\color{lstcomment}\itshape,
+  morestring=[b]", % chktex 18 (listings config, not prose)
+  stringstyle=\color{lststring},
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{lstbg},
+  breaklines=true,
+  captionpos=b,
+  columns=fullflexible,
+  frame=none,
+  keepspaces=true,
+  showstringspaces=false,
+  xleftmargin=1em,
+  aboveskip=0.8em,
+  belowskip=0.8em,
+}
+
+\lstnewenvironment{yamllisting}[1][]
+  {\lstset{language=yaml,#1}}
+  {}
+
+% ---------------------------------------------------------------------------
+% Project macros. Use these everywhere so terminology stays consistent and a
+% late rename is a one-line change.
+% ---------------------------------------------------------------------------
+\newcommand{\sysname}{\textsc{agent-tasks}\xspace}
+\usepackage{xspace}
+
+\newcommand{\crd}[1]{\texttt{#1}}
+\newcommand{\AgentTask}{\crd{AgentTask}}
+\newcommand{\AgentStep}{\crd{AgentStep}}
+\newcommand{\AgentWorkflow}{\crd{AgentWorkflow}}
+\newcommand{\AgentStepClass}{\crd{AgentStepClass}}
+\newcommand{\AgentWorkflowDefaults}{\crd{AgentWorkflowDefaults}}
+\newcommand{\TrackerConnection}{\crd{TrackerConnection}}
+\newcommand{\Sandbox}{\crd{Sandbox}}
+
+\newcommand{\nextaction}{\textsc{next-action}\xspace}
+\newcommand{\treehash}{\ensuremath{h}}
+\newcommand{\ledger}{\ensuremath{\mathcal{L}}}
+
+% Drafting aids. Comment out the definitions below before submission.
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}} % chktex 13
+\newcommand{\note}[1]{\textcolor{blue}{\textbf{[NOTE: #1]}}} % chktex 13
+% \renewcommand{\todo}[1]{}
+% \renewcommand{\note}[1]{}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{plain}
+\newtheorem{proposition}{Proposition}
+
+% ---------------------------------------------------------------------------
+% Front matter
+% ---------------------------------------------------------------------------
+\title{\sysname: Content-Addressed Verification for Autonomous\\
+       Coding Agents on Kubernetes}
+
+% TODO: confirm author list, affiliations, and ORCIDs before submission.
+\author{
+  Author One\thanks{Primitive. Correspondence: \texttt{author@example.com}} \\
+  \and
+  Author Two \\
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  \input{sections/00-abstract}
+\end{abstract}
+
+\input{sections/01-introduction}
+\input{sections/02-thesis}
+\input{sections/03-motivation}
+\input{sections/04-related-work}
+\input{sections/05-design-goals}
+\input{sections/06-ledger-model}
+\input{sections/07-workflow-spec}
+\input{sections/08-architecture}
+\input{sections/09-threat-model}
+\input{sections/10-candidates}
+\input{sections/11-tracker}
+\input{sections/12-validation-loop}
+\input{sections/13-evaluation}
+\input{sections/14-limitations}
+\input{sections/15-conclusion}
+\input{sections/16-availability}
+
+\bibliography{refs}
+
+\appendix
+\input{sections/appendix-a-manifests}
+\input{sections/appendix-b-semantics}
+
+\end{document}

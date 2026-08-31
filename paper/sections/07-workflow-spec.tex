@@ -1,0 +1,29 @@
+\section{Declarative Workflow Specification}
+\label{sec:workflow}
+
+% 1.5-2 pages.
+
+\subsection{Capability versus composition}
+% \AgentStepClass (cluster-scoped, admin): images, commands, executor, timeout,
+%   evidence format, autofix, catalog dependencies. This is CAPABILITY.
+% \AgentWorkflow (namespaced, team): which classes, dependency edges,
+%   invalidation globs, candidates, budgets, selection. This is COMPOSITION ONLY.
+% Security consequence: a tenant authoring a workflow cannot introduce an image.
+% RBAC falls out: write on workflows, read-only on classes.
+
+\subsection{Declaring dependencies and invalidation}
+% after: cost ordering and fail-fast.
+% invalidatedBy: the ledger's invalidation rules, as data rather than code.
+% Include the minimal and the full example listings side by side.
+
+\subsection{Resolution and version pinning}
+% Resolution order: explicit ref, tag match, repo match, sole workflow, default.
+% SECURITY: never resolve from ticket free text. Body and comments are writable
+% by anyone with issue access, including the agent. Resolve from trusted
+% structured fields only, once, at admission, before any agent code runs.
+% Pin specHash: editing a workflow mid-flight would silently void ledger entries.
+
+\subsection{Non-composable integrity requirements}
+% \AgentWorkflowDefaults injects required integrity steps via mutating webhook.
+% A tenant must not be able to compose away the suppression meta-gate.
+% Forward-reference Section 9.

@@ -1,0 +1,20 @@
+\section{Design Goals and Non-Goals}
+\label{sec:goals}
+
+% 0.5-1 page. Short, sharp, referenced back to throughout.
+
+\subsection{Goals}
+% G1 Convergence over execution: terminate at a verified fixed point.
+% G2 Declarative and Kubernetes-native: the CRDs are the contract.
+% G3 Capability/composition separation enforced by RBAC and admission.
+% G4 Tracker-neutral core: zero tracker-specific code in the operator.
+% G5 Standalone operation: kubectl apply with no external dependency.
+% G6 Sublinear verification cost via path-scoped invalidation.
+
+\subsection{Non-goals}
+% N1 We do not model the agent's internal reasoning loop.
+% N2 We do not provide the isolation runtime (delegated to agent-sandbox).
+% N3 We are not a general workflow engine; acyclic one-shot DAGs are better
+%    served by existing tools, and we use one as a step executor.
+% N4 Determining WHAT to build is the adopting organisation's product process
+%    and is out of scope. We assume a ticket exists and is specifiable.

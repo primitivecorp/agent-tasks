@@ -1,0 +1,31 @@
+\section{Introduction}
+\label{sec:intro}
+
+% 1.5-2 pages.
+
+\subsection{Problem}
+% The unit of work is a ticket; the desired output is a merged pull request.
+% Producing the diff is increasingly tractable. Establishing that the diff is
+% correct is not, and it is what actually gates deployment.
+
+\subsection{Why existing orchestration does not fit}
+% Two families, both mismatched:
+%   - CI/CD and workflow engines (Argo, Tekton, Airflow, Temporal): assume the
+%     tree is immutable for the duration of the run. Nodes execute once.
+%   - Agent frameworks (LangGraph, OpenHands, SWE-agent): model the reasoning
+%     loop but provide no isolation, no capacity model, no cluster primitives.
+% Neither treats verification state as a first-class, re-entrant artifact.
+
+\subsection{Contributions}
+% Enumerate 5. Draft:
+%   (C1) A formulation of agent scaling as a verification-capacity problem, with
+%        verification density as the tunable parameter.
+%   (C2) A content-addressed verification ledger with path-scoped invalidation,
+%        giving well-defined convergence and termination for a mutating tree.
+%   (C3) A declarative workflow specification that separates capability (cluster
+%        admin) from composition (team), with non-composable integrity gates.
+%   (C4) A threat model for agent-authored code in a shared cluster, including
+%        gate-gaming as adversarial selection pressure under best-of-N.
+%   (C5) An open-source Kubernetes implementation and a measured cost datapoint.
+
+\todo{Draft after Section 2 and Section 6 settle.}

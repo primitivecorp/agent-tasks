@@ -1,0 +1,16 @@
+# ChkTeX configuration for the agent-tasks paper.
+#
+# Lists written WITHOUT an `=` append to ChkTeX's built-in defaults rather
+# than replacing them (see the format notes at the top of /etc/chktexrc), so
+# this file only records project-specific exceptions.
+
+# Warning 1, "command terminated with space". These macros are defined with
+# \xspace in main.tex, which handles the trailing space correctly. ChkTeX has
+# no way to know that.
+Silent { \sysname \nextaction \AgentTask \AgentStep \AgentWorkflow }
+
+# Warning 24, "delete this space to maintain correct page references", fires
+# on the \section{...} then \label{...}-on-the-next-line convention used in
+# every file under sections/. The newline between them is harmless: \label
+# attaches to the sectioning command's counter, not to the surrounding text.
+CmdLine { -n24 }

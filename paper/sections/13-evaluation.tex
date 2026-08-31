@@ -1,0 +1,45 @@
+\section{Preliminary Evaluation}
+\label{sec:eval}
+
+% 2-3 pages. Without numbers this paper gets skimmed. Even preliminary helps.
+
+\subsection{Setup}
+% Full disclosure or the section is decorative: instance types, region,
+% on-demand vs spot, model and version, gate suite, N, run window (AWS and
+% model pricing both move). One repo -- self-hosting on the \sysname repo is a
+% legitimate and appealing framing. 20-50 tickets across at least two cost
+% classes so the spread is visible.
+% REPORT THE FAILURES: escalated tasks, post-merge rejections, meta-gate
+% rejections. Cost per merged PR that silently excludes failed attempts is
+% misleading and reviewers check for exactly this.
+
+\subsection{Convergence behaviour}
+% Turns per gate. Escalation reason distribution (oscillation-heavy => gates
+% conflict; budget-heavy => ladder too slow). Gate evidence quality as a
+% confound: bad error output is often the actual bug.
+
+\subsection{Invalidation efficiency}
+% Post-rebase gate survival rate. Gate-runs avoided by path scoping, as a
+% percentage. These validate the central claim of Section 6.
+
+\subsection{Cost}
+% Decomposed by axis, not a single dollar figure. Feeds the table in 8.6.
+% Transferable ratios (usable by readers with different pricing):
+%   slot utilisation = active step seconds / slot-held seconds
+%   verification:generation compute ratio
+%   tokens per merged PR
+
+\subsection{Safety}
+% Meta-gate rejection rate. Whether it rises with N -- the prediction from 9.3.
+% Audit-catch rate.
+
+\subsection{Trust over time}
+% THE THESIS AS A CURVE:
+%   post-merge validation failure rate should decline as gates accumulate
+%   human interventions per merged PR should decline while merge rate holds
+%   gate-suite growth vs escape rate: does converting findings to gates actually
+%     reduce recurrence, or do failures keep arriving in novel forms? If the
+%     latter, verification density has a ceiling and we must say so.
+
+\subsection{Threats to validity}
+% Single repo, single organisation, small N, short window, one model family.

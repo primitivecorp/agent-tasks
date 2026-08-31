@@ -1,0 +1,30 @@
+\section{Related Work}
+\label{sec:related}
+
+% 1.5-2 pages. MANDATORY for arXiv credibility.
+
+\subsection{Workflow and pipeline engines}
+% Argo Workflows, Tekton, Airflow, Temporal, Make.
+% Argo is the closest comparison: has memoization, but keyed on a user-supplied
+% cache key, not content-addressed with cascading invalidation. Acyclic by
+% definition; loops require recursion templates. Node status hits the etcd
+% object limit, motivating status offloading -- evidence for our design.
+
+\subsection{Build systems: our actual lineage}
+% Bazel, Nix, Buck, Nx. Build Systems a la Carte for the formal vocabulary.
+% Claim the lineage explicitly: our ledger is a build system's incrementality
+% model applied to a tree that an agent mutates rather than a human.
+% Difference: build systems assume the tree is fixed during a build.
+
+\subsection{Agent frameworks and benchmarks}
+% LangGraph, OpenHands, SWE-agent, SWE-bench.
+% These model the reasoning loop; we model the infrastructure and verification
+% substrate underneath it. Complementary, not competing.
+
+\subsection{Isolation}
+% gVisor, Kata Containers, Firecracker, agent-sandbox, commercial sandboxes.
+% We consume agent-sandbox rather than reimplementing; position \sysname as the
+% task-orchestration layer directly above it.
+
+\subsection{Kubernetes extension patterns}
+% Operator pattern, CRDs, Kueue for admission, level-triggered reconciliation.

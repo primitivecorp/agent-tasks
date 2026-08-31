@@ -1,0 +1,63 @@
+\section{Architecture}
+\label{sec:arch}
+
+% 3-4 pages.
+
+\subsection{Resource model}
+% Six CRDs. Table: kind / scope / writer / purpose.
+% \AgentTask (ns), \AgentStep (ns), \AgentWorkflow (ns), \TrackerConnection (ns),
+% \AgentStepClass (cluster), \AgentWorkflowDefaults (cluster singleton).
+% \AgentStep is Job-shaped: short-lived execution handle, content-keyed name,
+% TTL after completion. The name IS the idempotency key.
+
+\subsection{Controllers and the projection chain}
+% Postgres (facts) -> AgentTask.status (materialised) -> tracker (rendered).
+% Nothing authoritative in two places.
+% CRITICAL: the operator must not run the agent inside Reconcile. An LLM turn is
+% a long, expensive, non-idempotent side effect; reconcile is level-triggered.
+% The operator creates AgentSteps and observes them.
+
+\subsection{Isolation and placement}
+% microVM (Kata/Firecracker) on bare metal for anything derived from the
+% agent's workspace; pinned-digest catalog images on elastic shared-kernel nodes.
+% PROVENANCE RULE, enforced by ValidatingAdmissionPolicy:
+%   images matching sandbox/* MUST set runtimeClassName kata-* and live in a
+%   work namespace.
+% Note the filesystem constraint that drives co-location: inotify does not cross
+% NFS, and Firecracker is block-only, so the agent and its dev servers share one
+% microVM rather than a distributed filesystem.
+
+\subsection{State: hot path and follower}
+% etcd for the control plane and the live ledger; it is the ONLY thing on the
+% reconcile path. A separate projector appends facts to Postgres.
+% Postgres down => history stops accruing, pipeline keeps running. Not tier-1.
+% Contrast with Argo, whose offloaded status IS on the reconcile path.
+% Gap-free projection: AgentStep finalizer released only after the append commits.
+
+\subsection{Capacity and admission}
+% Two scarce resources with different shapes: sandbox slots (per task, hours,
+% metal-bound) and inference (per step, seconds, rate-limit-bound).
+% Slot tenure is the dominant lever: commit-per-step makes the sandbox
+% disposable, enabling release on wait, preemption at step boundaries, and crash
+% recovery through one mechanism.
+% Capacity gating is separate from the controller workqueue.
+
+\subsection{Cost considerations}
+\label{sec:cost}
+% ~1 page. Qualitative framing + ONE measured datapoint. Explicitly hedged.
+% Three axes and how they scale:
+%   C_sandbox    ~ concurrent_tasks x tenure           (poor elasticity, metal)
+%   C_verify     ~ tasks x affected_gates x candidates (good elasticity)
+%   C_inference  ~ turns                               (rented variable / owned fixed)
+% Which mechanism attacks which term:
+%   tenure          <- slot release, commit-per-step
+%   affected_gates  <- path-scoped invalidation, affected-target scoping
+%   candidates      <- pressure-sensitive N
+%   inference       <- self-hosted GPU converts variable to fixed
+% State plainly: absolute figures depend on instance mix, repo size, gate suite,
+% model choice, and rented-vs-owned inference. Numbers are a single-configuration
+% datapoint, not a general model. Readers should reproduce on their workload.
+% Then one table (see Section 13 for the measurement) and one interpretation
+% paragraph. Write the interpretation LAST.
+\todo{Fill the cost table after the AWS experiment run. Do not draft the
+  interpretation paragraph against placeholder numbers.}
