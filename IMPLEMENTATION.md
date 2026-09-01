@@ -6,9 +6,9 @@ Repository: `github.com/primitivecorp/agent-tasks`
 API group: `agents.primitive.dev/v1alpha1`
 License: Apache-2.0
 
-Supersedes the v1 specification. Appendix A maps every change back to its
-rationale. Appendix B reserves the concepts deliberately deferred out of
-Phase 1.
+Revision v2.1. Supersedes the v1 specification. Appendix A maps every change
+back to its rationale, including the v2 → v2.1 review revisions. Appendix B
+reserves the concepts deliberately deferred out of Phase 1.
 
 ---
 
@@ -88,7 +88,7 @@ reserved semantics so later phases do not have to rediscover them.
 | Action | A step that may mutate the workspace. Completing an Action produces a new snapshot or leaves the snapshot unchanged. An Action has run-state, never validity: it is not "green forever", it either has completed or it has not. |
 | Gate | A step that evaluates a snapshot and returns `Passed`, `Failed`, or `Errored`, plus evidence. A Gate never mutates the workspace. |
 | Driver | The one Action step designated by the workflow as the agent that does the work. It runs once at task start and again whenever a failed gate needs a fix that no cheaper fix Action resolved. |
-| Fix Action | An ordinary Action class referenced by a Gate class (`fixAction`). Tried once per snapshot before spending a driver attempt. |
+| Fix Action | An ordinary Action class referenced by a Gate class (`fixAction`). Plan resolution synthesizes it into a first-class resolved Action with identity `<gate>@fix` (§4), owning its own state and execution names, excluded from the topological walk. Tried once per snapshot before spending a driver run. |
 | Ledger | Conceptually, the partial function `(gate, gateKey) → result + evidence`. Its Kubernetes representation is the bounded **gate-state view** (§2.3), not an append-only log. |
 | Gate key | `hash(snapshotID, resolvedClassSpecHash)` — changing the verifier invalidates its old results. Within one task the plan is pinned, so the key degenerates to `snapshotID`; the structure exists for cross-task reuse later. |
 | Resolved plan | The complete, immutable, executable interpretation of the task: workflow, policy, every referenced class, injected required gates, budgets. Pinned at admission (§4). |
@@ -144,11 +144,13 @@ type View struct {
     Lineage         []SnapshotRecord // full hash chain — see bound below
     Oscillation     bool             // set by Fold, read by Decide
 
-    Gates   map[string]GateState     // keyed by workflow step name
-    Actions map[string]ActionState   // keyed by workflow step name
+    Gates   map[string]GateState     // keyed by resolved step name
+    Actions map[string]ActionState   // keyed by resolved action name —
+                                     // synthesized `<gate>@fix` entries included
 
-    DriverAttempts int               // every driver completion, initial included
-    Spend          Spend
+    DriverRuns int                   // every driver completion, initial included
+    Spend      Spend                 // tokens + accumulated ACTIVE runtime:
+                                     // starts at Provisioned, pauses Suspended
 }
 
 type GateState struct {
@@ -157,16 +159,18 @@ type GateState struct {
     EvidenceRef      string
     Evidence         string // inline excerpt, capped (§5.3)
     FailureCount     int    // observability only
-    FixAttemptedAt   string // snapshot at which fixAction last ran for this gate
+    FixAttemptedAt   string // INPUT snapshot of the most recent fix attempt
+                            // for this gate — written by Fold, read by Decide
     FixAttempts      int    // lifetime, bounded by budgets.fixAttemptsPerGate
-    InfraRetries     int    // Errored executions, bounded by budgets.infraRetries
+    InfraRetries     int    // CONSECUTIVE Errored executions; reset to 0 by
+                            // any successful execution of this step
     ExecutionAttempt int    // completed executions; next name uses +1
 }
 
 type ActionState struct {
     Completions      int
     LastSnapshot     string // snapshot the last completion produced
-    InfraRetries     int    // Errored executions, bounded by budgets.infraRetries
+    InfraRetries     int    // consecutive Errored executions; reset on success
     ExecutionAttempt int
 }
 ```
@@ -230,19 +234,27 @@ active.
    state, the loop is cycling. Then append `h'`, adopt it as current, and
    apply invalidation with the changed path set.
 3. Increment the step's `ExecutionAttempt`, the action's `Completions`,
-   `DriverAttempts` if the step is the driver, `FixAttempts` on the
-   attributed gate if the trigger was `FixAction`, and spend.
+   `DriverRuns` if the step is the driver, and spend; reset the step's
+   `InfraRetries` to 0. If the trigger was `FixAction`: increment
+   `FixAttempts` on the attributed gate **and set its `FixAttemptedAt` to the
+   execution's INPUT snapshot** — the input, not the result. A no-op fixer
+   leaves the snapshot unchanged and the gate still `Failed`, and it is
+   exactly `FixAttemptedAt == currentSnapshot` that stops `Decide` from
+   scheduling the same fixer again and moves the gate to the driver.
 
 **Fold**, on a Gate completion: record `{result, verifiedSnapshot = input
 snapshot, evidence}`; increment `ExecutionAttempt`, `FailureCount` on a
-failure, and spend. Single-flight guarantees the input snapshot is still
-current.
+failure, and spend; reset the gate's `InfraRetries` to 0 — the infra bound
+counts consecutive failures to perform a step, not lifetime bad luck.
+Single-flight guarantees the input snapshot is still current.
 
 **Fold**, on an `Errored` execution of either kind: increment the step's
 `ExecutionAttempt` and `InfraRetries`; gates record the `Errored` result;
 actions record no completion. Retry happens naturally — the gate is
 re-schedulable and the action is still incomplete — and the preamble's infra
-bound caps it.
+bound caps the consecutive run. Only success resets the counter; a snapshot
+change deliberately does not — a step that has never succeeded does not earn
+fresh retries because the workspace moved.
 
 **Fold**, on a canceled or abandoned execution: increment `ExecutionAttempt`
 (freeing the deterministic name) and change nothing else.
@@ -273,13 +285,13 @@ bound caps it.
                                               # preamble bounds the retries
      if g.Result == Failed:
         if !step.Blocking                     → continue  # recorded, tolerated
-        if step.FixAction != ""
+        if step.FixAction != nil
            && g.FixAttemptedAt != v.CurrentSnapshot
            && g.FixAttempts < budgets.fixAttemptsPerGate
-                                             → RunAction(step.FixAction,
+                                             → RunAction("<step>@fix",
                                                          FixAction(step))
-        if v.DriverAttempts >= budgets.driverAttempts
-                                             → Escalate("driver-attempts", step)
+        if v.DriverRuns >= budgets.maxDriverRuns
+                                             → Escalate("driver-runs", step)
                                              → RunAction(plan.Driver,
                                                          GateFailure(step),
                                                          failures=[g])
@@ -291,7 +303,7 @@ bound caps it.
 
 Properties worth stating because their absence was a v1 bug:
 
-- **Budget guards remediation, never verification.** The driver-attempts check
+- **Budget guards remediation, never verification.** The driver-runs check
   sits inside the Failed branch, guarding the decision to spend another fix.
   A gate left Unknown by the final budgeted fix is still run — the last fix's
   outcome is always observed before any escalation.
@@ -311,6 +323,8 @@ Properties worth stating because their absence was a v1 bug:
   Unknown again via a new snapshot; new snapshots only come from budget-capped
   Actions.
 - **Fix loops terminate.** A fix Action runs at most once per (gate, snapshot)
+  — `Fold` records `FixAttemptedAt` from the fix's input snapshot, so even a
+  no-op fixer is never rescheduled at the snapshot it failed to change —
   and at most `fixAttemptsPerGate` times per gate lifetime; a fixer that keeps
   producing fresh snapshots without fixing the gate falls through to the
   driver, which is capped.
@@ -323,9 +337,9 @@ Exactly five conditions, all checked in the pure core:
 |---|---|---|
 | Success | Every blocking gate `Passed` at `currentSnapshot`, every Action completed ≥ 1 | `Validated` → cleanup → `Succeeded` |
 | Oscillation | A newly produced snapshot equals a non-parent ancestor in lineage | `Failed("oscillation")` |
-| Driver attempts | `DriverAttempts` reaches `budgets.driverAttempts` while a blocking gate is failed | `Failed("driver-attempts")` |
-| Wall clock | Age since task creation exceeds `budgets.wallClock` | `Failed("wall-clock")` |
-| Infrastructure | A step's `Errored` executions reach `budgets.infraRetries` | `Failed("infra")` |
+| Driver runs | `DriverRuns` reaches `budgets.maxDriverRuns` while a blocking gate is failed | `Failed("driver-runs")` |
+| Wall clock | Active runtime — accumulated since `Provisioned`, excluding time spent `Suspended` — exceeds `budgets.wallClock` | `Failed("wall-clock")` |
+| Infrastructure | A step's **consecutive** `Errored` executions reach `budgets.infraRetries` | `Failed("infra")` |
 
 Token exhaustion folds into the wall-clock/budget family
 (`Failed("token-budget")`). The diff-size ratchet from v1 is deferred: it is a
@@ -366,7 +380,8 @@ type AgentStepClassSpec struct {
 
     // Gate-only. CEL rejects these on kind: Action.
     Blocking  bool
-    FixAction string       // name of an Action class tried before the driver
+    FixAction string       // Action class name; plan resolution synthesizes
+                           // the fix identity "<gate>@fix" from it (§4)
     Evidence  EvidenceSpec
 
     // Action-only. CEL rejects these on kind: Gate.
@@ -458,7 +473,9 @@ type AgentClusterPolicySpec struct {
 }
 
 type RequiredGate struct {
-    Name  string // step name in the resolved plan; must not collide
+    Name  string // resolved-plan identity becomes "<name>@policy" — a
+                 // reserved namespace no workflow step can occupy, so
+                 // collision is impossible rather than an admission error
     Class string // concrete Gate class — deterministic, never a group
 }
 
@@ -472,10 +489,10 @@ type WorkNamespaceTemplate struct {
 
 type Budgets struct {
     Tokens             int64
-    WallClock          metav1.Duration
-    DriverAttempts     int // default 5; counts every driver run, initial included
+    WallClock          metav1.Duration // ACTIVE runtime; excludes Suspended time
+    MaxDriverRuns      int // default 5; total driver invocations, initial included
     FixAttemptsPerGate int // default 3
-    InfraRetries       int // default 2
+    InfraRetries       int // default 2; CONSECUTIVE failures of one step
 }
 ```
 
@@ -492,7 +509,7 @@ spec:
   ceilings:
     tokens: 8000000
     wallClock: 4h
-    driverAttempts: 8
+    maxDriverRuns: 8
     fixAttemptsPerGate: 5
     infraRetries: 3
   workNamespace:
@@ -553,7 +570,7 @@ spec:
   budgets:
     tokens: 400000
     wallClock: 20m
-    driverAttempts: 5
+    maxDriverRuns: 5
   steps:
     - name: implement
       class: coding-agent
@@ -571,9 +588,15 @@ CEL rules: step names unique; `driver` non-empty; `spec` immutable after
 creation (edit-by-replace; running tasks are pinned regardless).
 
 Controller-checked at plan resolution (§4): every class exists and is allowed
-by policy; `driver` names a step whose class is `kind: Action`;
-`invalidatedBy` appears only on Gate steps; `after` references exist and form
-no cycle; budgets ≤ ceilings.
+by policy; **exactly one step is an Action, and `driver` names it** — a
+Phase 1 workflow is one driver plus gates; fix actions are synthesized, never
+authored, and multi-action workflows return only when a later phase defines
+their rerun semantics (an authored second Action would have defined-but-
+degenerate run-exactly-once semantics: a trap, not a feature); `invalidatedBy`
+appears only on Gate steps; `after` references exist and form no cycle; step
+names are DNS-1123 labels — `@` cannot appear in an authored name, which is
+what makes the synthesized `@fix`/`@policy` identity space collision-proof;
+budgets ≤ ceilings.
 
 There is no `selection`, no `candidates`, no `escalationPolicy`, no
 `mergePolicy`, and no `fanOut`. Workflow selection is `workflowRef` on the
@@ -636,7 +659,10 @@ type ResolvedStep struct {
     Args          []string
     Timeout       metav1.Duration
     Blocking      bool     // gates
-    FixAction     *ResolvedStep
+    FixAction     *ResolvedStep // synthesized: Name = "<gate>@fix"; owns its
+                                // ActionState and execution names; embedded
+                                // here (single source of truth) and excluded
+                                // from the topological walk
     InvalidatedBy []string // defaulted; ["**"] for injected gates
     Injected      bool     // true for policy-required gates
     After         []string
@@ -666,7 +692,7 @@ Conditions:
 |---|---|
 | `Admitted` | Plan resolved and pinned. `False` with reason on any resolution failure; the controller re-attempts via watches on workflows, classes, and the policy — recovery requires no manual poke. |
 | `Provisioned` | Work namespace exists with quota and network policies materialized; view initialized at the base snapshot. |
-| `Suspended` | `spec.suspend` observed: active execution canceled, workspace and view retained, scheduling held. |
+| `Suspended` | `spec.suspend` observed: active execution canceled, workspace and view retained, scheduling held, and the wall-clock budget paused. |
 | `Validated` | Convergence reached (`Decide` returned `Done`). |
 | `Succeeded` | Terminal. Post-`Validated` cleanup complete. Phase 1 has no merge path, so `Validated` proceeds directly to cleanup and `Succeeded`. |
 | `Failed` | Terminal, with the termination reason. |
@@ -695,7 +721,7 @@ Print columns:
 NAME  WORKFLOW  PHASE  SNAPSHOT  DRIVER  TOKENS  AGE
 ```
 
-(`SNAPSHOT` is the short current hash; `DRIVER` is `attempts/cap`.)
+(`SNAPSHOT` is the short current hash; `DRIVER` is `runs/cap`.)
 
 ### 3.5 AgentStep (namespaced)
 
@@ -773,6 +799,12 @@ name = trunc(taskName, 24) + "-" + trunc(stepName, 12) + "-" +
               executionAttempt)[:10]
 ```
 
+Synthesized identities (`lint@fix`, `integrity@policy`) contain `@`, which is
+not legal in a Kubernetes object name: the readable `stepName` segment is
+sanitized (`@` → `-`) when the name is assembled. Identity lives in the
+hashed suffix — the hash input uses the unsanitized step name — so
+sanitization can never collide two distinct executions.
+
 `executionAttempt` for the next execution of a step is always
 `view.<step>.ExecutionAttempt + 1` — an explicit stored counter (§2.3), so a
 duplicate reconcile recomputes the identical name and `AlreadyExists` makes
@@ -808,21 +840,34 @@ pinned immediately.
 3. **Resolve every class** referenced by workflow steps, `fixAction` fields,
    and policy `requiredGates`. Validate: classes exist; classes are in
    `allowedClasses`; step/class kinds are consistent (gate steps use Gate
-   classes, the driver uses an Action class, `fixAction` targets Action
-   classes); `invalidatedBy` appears only on gate steps; `after` forms a DAG.
+   classes, `fixAction` targets Action classes); **exactly one step is an
+   Action and `driver` names it**; step names are DNS-1123 labels;
+   `invalidatedBy` appears only on gate steps; `after` forms a DAG.
 4. **Default invalidation**: any gate step without `invalidatedBy` gets
    `["**"]`.
-5. **Inject required gates.** For each policy `requiredGate` whose class-name
-   is not already satisfied by a workflow step of the same class: append a
-   resolved gate step named per the policy, `after` all workflow steps,
-   `blocking: true`, `invalidatedBy: ["**"]`, `injected: true`. Injection
-   happens at **plan resolution, not by mutating the workflow object** —
-   teams never see, and can never edit or remove, the injected steps; the
-   invariant needs no mutating webhook to hold. A name collision with a
-   workflow step ⇒ admission failure.
-6. **Validate budgets ≤ ceilings.** Reject (`Admitted=False,
+5. **Synthesize fix actions.** For each gate whose class declares `fixAction`,
+   synthesize a resolved Action with identity `<gate>@fix` from the referenced
+   Action class, embedded under the gate's resolved step. It is a first-class
+   execution identity — it owns an `ActionState`, an `ExecutionAttempt`
+   counter, and AgentStep names — but it is not in the topological walk: it
+   runs only when `Decide` remediates its gate.
+6. **Inject required gates — always, unconditionally.** For each policy
+   `requiredGate`, append a resolved gate step with identity `<name>@policy`,
+   `after` all workflow steps, `blocking: true`, `invalidatedBy: ["**"]`,
+   `injected: true`. Injection is **never suppressed by an authored step of
+   the same class**: an authored step's `after` and `invalidatedBy` are
+   team-controlled, so honoring it as a substitute would let a workflow
+   shadow a required gate with a weakened copy. No deduplication is
+   attempted — the duplicate run when a team voluntarily authors the same
+   class is the cheap outcome, and the team can delete its own copy. The
+   `@policy` identity lives in the reserved namespace (§3.3), so collision
+   with a workflow step is impossible by construction rather than an
+   admission error. Injection happens at **plan resolution, not by mutating
+   the workflow object** — teams never see, and can never edit or remove,
+   the injected steps; the invariant needs no mutating webhook to hold.
+7. **Validate budgets ≤ ceilings.** Reject (`Admitted=False,
    reason=BudgetCeiling`), never clamp.
-7. **Pin.** Write `status.resolvedPlan` (with `specHash` for workflow, policy,
+8. **Pin.** Write `status.resolvedPlan` (with `specHash` for workflow, policy,
    and every class, plus the aggregate `planHash`), set `Admitted=True`.
    CEL freezes it from this write forward.
 
@@ -857,8 +902,8 @@ Reconcile(task):
 
   if task.Spec.Suspend:
       if activeExecution: Cancel(it)                   # workspace and view RETAINED
-      setCondition(Suspended); return
-  clearCondition(Suspended)
+      setCondition(Suspended); return                  # wall clock PAUSES here
+  clearCondition(Suspended)                            # resume restarts the clock
 
   if activeExecution != "":
       step = get(activeExecution)
@@ -869,8 +914,10 @@ Reconcile(task):
       return                                           # running; step watch re-triggers
 
   if Validated:                                        # ordinary-reconcile cleanup —
-      deleteWorkNamespace()                            # success cleanup is NOT the
-      setCondition(Succeeded); return                  # finalizer's job
+      requestWorkNamespaceDeletion()                   # success cleanup is NOT the
+      if workNamespaceStillExists():                   # finalizer's job
+          requeueAfter(poll); return                   # deletion is ASYNC: wait it out
+      setCondition(Succeeded); return                  # Succeeded MEANS cleanup done
 
   action = Decide(plan, view, budgets)
   switch action.Type:
@@ -901,7 +948,11 @@ Notes:
   same terminal step (Fold is pure; `Poll` of a terminal execution is stable);
   a crash after it leaves a folded, labeled step for the reaper.
 - Wall-clock enforcement needs no timer loop: reconcile computes remaining
-  budget and uses `RequeueAfter` to wake at expiry.
+  budget and uses `RequeueAfter` to wake at expiry. The budget measures
+  **active runtime**: accumulation starts at `Provisioned` (a task parked on
+  a missing class burns nothing) and pauses while `Suspended`. The view
+  stores the accumulated active duration plus the timestamp accumulation
+  last resumed, so the clock survives controller restarts.
 
 ### 5.2 AgentStep controller
 
@@ -946,7 +997,8 @@ type State struct {
     Running               bool
     Result                string // Passed | Failed | Errored (gates)
     ExitReason            string
-    ResultSnapshot        string   // actions
+    ResultSnapshot        string   // actions: the produced snapshot;
+                                   // gates: echo of the input snapshot
     ChangedPaths          []string // actions; full set up to the cap
     ChangedPathsTruncated bool     // set ⇒ consumers must over-invalidate
     ChangedPathCount      int
@@ -961,6 +1013,13 @@ Contract points that exist because their absence was a v1 bug: `ChangedPaths`
 is part of the result (invalidation is uncomputable without it), truncation is
 explicit and consumers must respond by clearing everything, and terminal
 results are stable under repeated `Poll` so folds are replayable.
+
+One invariant is stated now so real executors are built to it: **gates execute
+against read-only workspace mounts**, and an executor echoes the gate's input
+snapshot as `ResultSnapshot`. A mismatch is a contract violation surfaced as
+`Errored (ExitReason: GateMutation)` — never adopted as a new snapshot.
+Read-only mounting is the mechanism; the echo check is the backstop. "Gates
+never mutate" is enforced, not assumed.
 
 **Fake executor (Phase 1).** Reads a scripted outcome from a ConfigMap keyed
 by `(stepName, executionAttempt)`. Delay is implemented as a deadline recorded
@@ -989,8 +1048,8 @@ data:
         result: Failed
         evidence: "E501 line too long: src/export.py:41"
         delay: 1s
-      # lint's fixAction (lint-python-fix) runs as an ordinary Action:
-      - stepName: lint@fix          # fix runs are keyed <gate>@fix
+      # lint's synthesized fix action — a first-class identity in the plan:
+      - stepName: lint@fix
         attempt: 1
         result: Passed
         resultSnapshot: h2
@@ -1013,7 +1072,7 @@ data:
       - stepName: unit
         attempt: 2
         result: Passed
-      - stepName: integrity
+      - stepName: integrity@policy
         attempt: 1
         result: Passed
 ```
@@ -1062,12 +1121,16 @@ executors, but every invariant that can hold now, holds now.
    policy, and every class, resolved *into* the plan by content. Later edits
    to any of them cannot alter a running task's gate set, images, commands,
    ceilings, or budgets. Set-once is CEL-enforced on the status field.
-3. **Required gates are injected at plan resolution, never authored, never
-   mutated into team objects.** Nothing in the workflow schema can express
-   removing them, and no mutating webhook exists to be misconfigured.
-   Injected gates are always blocking and always invalidated by any change
-   (`["**"]`) — a required gate that could carry forward from the base
-   snapshot would be a required gate that never re-runs.
+3. **Required gates are injected at plan resolution — always, never authored,
+   never suppressed.** Nothing in the workflow schema can express removing
+   them, no mutating webhook exists to be misconfigured, and an authored step
+   of the same class never stands in for the policy's copy: the authored
+   step's `after` and `invalidatedBy` are team-controlled, so treating it as
+   satisfying the requirement would let a workflow shadow a required gate
+   with a weakened one. The injected copy owns a reserved identity
+   (`<name>@policy`), is always blocking, and is always invalidated by any
+   change (`["**"]`) — a required gate that could carry forward from the
+   base snapshot would be a required gate that never re-runs.
 4. **Budgets are rejected, not clamped.** A workflow requesting more than the
    policy ceiling fails admission with a reason.
 5. **No policy admits nothing.** A cluster without the `default`
@@ -1084,7 +1147,9 @@ executors, but every invariant that can hold now, holds now.
 9. **Evidence is not trusted from the workspace.** Executors produce evidence
    from tool output and copy it out; a path inside the agent-writable
    workspace is never the source of record. (Phase 1: inline capped excerpts;
-   durable store later.)
+   durable store later.) In the same spirit, real executors run gates against
+   read-only workspace mounts, with the snapshot-echo check of §5.3 as the
+   backstop.
 10. **Provenance placement (reserved).** A `ValidatingAdmissionPolicy` will
     require any pod whose image matches `sandbox/*` to set
     `runtimeClassName: kata-*` and live in a work namespace. It lands with the
@@ -1170,13 +1235,18 @@ each of which encodes a decision from this document:
 - A task whose base snapshot already passes every gate still runs the driver:
   `Done` is unreachable with zero driver completions
 - Fix-before-driver: failed gate with a fixAction runs the fix first
-- Fix dedupe: a fixAction runs at most once per (gate, snapshot)
+- Fix dedupe: a fix action runs at most once per (gate, snapshot); a no-op
+  fixer (result snapshot == input) sets `FixAttemptedAt` and is not
+  rescheduled — the gate proceeds to the driver
 - Fix cap: `fixAttemptsPerGate` exhausted falls through to the driver
-- Driver cap: `driverAttempts` reached with a blocking failure escalates
+- Driver cap: `maxDriverRuns` reached with a blocking failure escalates
 - The last budgeted fix is always observed: a gate left Unknown by the final
-  driver attempt is re-run, never escalated past
-- Errored (gate or action): retries up to `infraRetries`, then escalates as
-  infra, and burns no fix or driver budget
+  driver run is re-run, never escalated past
+- Errored (gate or action): retries up to `infraRetries` consecutive
+  failures, then escalates as infra, and burns no fix or driver budget
+- Infra reset: a success resets a step's consecutive count — two transient
+  errors separated by a success never escalate; a snapshot change alone
+  resets nothing
 - Non-blocking failure is recorded, does not schedule a fix, does not block
   `Done`
 - `Done` requires every blocking gate green with `verifiedSnapshot ==
@@ -1192,9 +1262,11 @@ All five kinds, deepcopy, defaults, print columns, CEL validation rules
 
 ### Step 3 — Plan resolution and admission
 
-`internal/plan` with envtest: resolution, kind-consistency checks, DAG
-validation, ceiling enforcement, required-gate injection (including the
-name-collision failure), pinning, and watch-driven admission retry.
+`internal/plan` with envtest: resolution, kind-consistency checks, the
+single-authored-Action rule, DAG validation, ceiling enforcement, fix-action
+synthesis (`<gate>@fix`), required-gate injection — always, including over a
+workflow that authors the required class with weakened invalidation —
+pinning, and watch-driven admission retry.
 
 ### Step 4 — Controllers with the fake executor
 
@@ -1217,12 +1289,15 @@ a condition nothing wrote.)
 library (driver, gate/fix pairs, integrity gate), one `AgentWorkflow`, one
 `AgentTask`, and the fake-executor script ConfigMap.
 
-Additional cases: escalation on oscillation; escalation on driver-attempt
-exhaustion; escalation on wall clock; infra escalation; suspend mid-task then
-resume to completion; task rejected for budgets over ceilings; task rejected
-for a workflow cycle; task blocked on a missing class, then admitted when the
-class appears; work namespace deleted on success; namespace retained on
-failure and reaped after retention; full teardown on task deletion.
+Additional cases: escalation on oscillation; escalation on driver-run
+exhaustion; escalation on wall clock, with suspended time excluded; infra
+escalation; suspend mid-task then resume to completion; task rejected for
+budgets over ceilings; task rejected for a workflow cycle; task rejected for
+a second authored Action; a workflow authoring the required gate's class
+still receives the injected `@policy` copy; task blocked on a missing class,
+then admitted when the class appears; `Succeeded` set only after the work
+namespace is observed gone; namespace retained on failure and reaped after
+retention; full teardown on task deletion.
 
 ---
 
@@ -1247,12 +1322,13 @@ failure and reaped after retention; full teardown on task deletion.
 ## 10. Reference trace
 
 A task using `python-minimal` against the fake script in §5.3. The policy
-injects the `integrity` gate.
+injects the `integrity@policy` gate.
 
 ```
  1  apply AgentTask fix-csv-export
  2  Admit: policy default + workflow python-minimal + classes resolved,
-    integrity gate injected (blocking, invalidatedBy ["**"]), plan pinned
+    lint@fix synthesized, integrity@policy injected — always, blocking,
+    invalidatedBy ["**"] — plan pinned
  3  condition Admitted
  4  provision namespace at-3f9c01d2a7b4, quota + default-deny + allow-dns
  5  view initialized at h0                          condition Provisioned
@@ -1261,20 +1337,22 @@ injects the `integrity` gate.
  7  implement a1 → Passed, h1, changed {src/export.py, tests/test_export.py}
  8  Fold: lineage h0→h1; all gates Unknown (default rules)
  9  Decide → RunGate lint         → Failed at h1 (E501)
-10  Decide → RunAction lint-python-fix (FixAction lint)   # fix before driver
-11  fix a1 → Passed, h2, changed {src/export.py}
-12  Fold: lineage h1→h2; lint cleared (globs hit); unit/integrity were Unknown
+10  Decide → RunAction lint@fix (FixAction lint)          # fix before driver
+11  lint@fix a1 → Passed, h2, changed {src/export.py}
+12  Fold: lint.FixAttemptedAt = h1; lineage h1→h2; lint cleared (globs hit);
+    unit/integrity@policy were Unknown
 13  Decide → RunGate lint         → Passed at h2
 14  Decide → RunGate unit         → Failed at h2 (trailing-row assertion)
 15  unit has no fixAction → Decide → RunAction implement
-       (GateFailure unit, failures=[{unit, evidence}])    # driver attempt 2
+       (GateFailure unit, failures=[{unit, evidence}])    # driver run 2
 16  implement a2 → Passed, h3, changed {src/export.py, tests/test_export.py}
-17  Fold: lineage h2→h3; lint, unit, integrity all cleared
-18  Decide → RunGate lint → Passed; unit → Passed; integrity → Passed  (at h3)
+17  Fold: lineage h2→h3; lint, unit, integrity@policy all cleared
+18  Decide → RunGate lint → Passed; unit → Passed;
+    integrity@policy → Passed                              (all at h3)
 19  Decide → Done: driver ran (2), all blocking gates Passed@h3
 20  condition Validated
-21  ordinary reconcile: delete namespace at-3f9c01d2a7b4
-22  condition Succeeded
+21  ordinary reconcile: request deletion of at-3f9c01d2a7b4
+22  requeue until the namespace is observed gone; condition Succeeded
 ```
 
 Line 17 is the behavior that distinguishes this system from a pipeline: gates
@@ -1302,7 +1380,20 @@ the base tree is never success — the driver's work is part of the fixed point.
 | 12 | `Result` lacked changed paths; ledger lacked mode; `Errored` unhandled | `ChangedPaths` (+ truncation ⇒ over-invalidate), fix tracking in `GateState`, explicit infra-retry policy | Invalidation was uncomputable; fix dedupe was unrecordable |
 | 13 | Tree hash | `snapshotID` + structural `gateKey(snapshot, class-spec hash)`; `scope: Tree \| Diff` reserved | Changing the verifier must invalidate results; base-rev stays out of snapshot identity so rebases keep unrelated evidence (Appendix B) |
 | 14 | Candidates, FanOut, findings, selection modes, merge policies, Elicit/Retry, catalog, diff-ratchet, TrackerConnection in-schema | Cut; semantics reserved in Appendix B | None answers the Phase 1 question; Kubernetes APIs are sticky |
-| 15 | Attempt semantics ambiguous across name/script/window | Stored `ExecutionAttempt` per step; lifetime `driverAttempts` + per-gate fix caps replace the sliding window | Determinism for names; simpler termination with one driver |
+| 15 | Attempt semantics ambiguous across name/script/window | Stored `ExecutionAttempt` per step; lifetime driver cap + per-gate fix caps replace the sliding window | Determinism for names; simpler termination with one driver |
+
+### v2 → v2.1 (post-review revisions)
+
+| # | v2 | v2.1 | Why |
+|---|---|---|---|
+| 16 | Fix actions resolved by content only; execution identity existed nowhere but the fake script | First-class synthesized identities `<gate>@fix` at plan resolution, owning `ActionState` and step names, embedded under the gate, excluded from the topological walk | The state model keyed everything by step name while fix executions had none — counters, deterministic names, and the script keying had nothing to attach to |
+| 17 | `FixAttemptedAt` read by `Decide`, never written by `Fold` | `Fold` sets it to the fix's **input** snapshot | A no-op fixer was rescheduled until the lifetime cap instead of falling through to the driver after one attempt |
+| 18 | Required-gate injection deduplicated by class | Always injected as `<name>@policy`; an authored occurrence never suppresses it; no dedup logic exists | An authored step of the same class carries team-controlled `invalidatedBy`/`after` — dedup let a workflow shadow a required gate with a weakened copy, reintroducing the v1 integrity hole |
+| 19 | `InfraRetries` counted per step lifetime | Consecutive: reset by any success of that step; deliberately not reset by snapshot changes | Two unrelated transient errors hours apart could kill a task; snapshot-keyed resets would hand a never-succeeding step unlimited retries |
+| 20 | `Succeeded` set in the same reconcile that requests namespace deletion | Set only after the namespace is observed gone | Namespace deletion is async and `Succeeded` is documented as "cleanup complete"; the e2e now actually verifies teardown |
+| 21 | Workflows could author multiple Action steps with run-once semantics | Exactly one authored Action — the driver — enforced at admission | Extra authored actions had defined but degenerate semantics (run exactly once, ever): a rerun-expectations trap with no Phase 1 use |
+| 22 | Wall clock = age since task creation | Active runtime: accumulates from `Provisioned`, pauses while `Suspended` | Suspension and admission waits consumed budget, contradicting suspend-and-resume and failing parked tasks that never ran |
+| 23 | `DriverAttempts`; gate non-mutation asserted | `DriverRuns`/`maxDriverRuns`; gates run on read-only mounts with a snapshot-echo backstop (real executors) | "Attempts" read as remediation-only, excluding the initial run; "gates never mutate" needed a mechanism, not an assumption. Synthesized `@` identities are sanitized in object names (`@` is not DNS-1123) with identity preserved in the hashed suffix |
 
 ## Appendix B — Reserved concepts (deferred, not discarded)
 
