@@ -6,9 +6,10 @@ Repository: `github.com/primitivecorp/agent-tasks`
 API group: `agents.primitive.dev/v1alpha1`
 License: Apache-2.0
 
-Revision v2.1. Supersedes the v1 specification. Appendix A maps every change
-back to its rationale, including the v2 → v2.1 review revisions. Appendix B
-reserves the concepts deliberately deferred out of Phase 1.
+Revision v2.2. Supersedes the v1 specification. Appendix A maps every change
+back to its rationale, including the post-review revisions. Appendix B
+reserves the concepts deliberately deferred out of Phase 1. The executable
+contract and test matrix for the pure core live in `CONVERGENCE.md`.
 
 ---
 
@@ -195,7 +196,10 @@ Rules that make the view sufficient and bounded:
 ### 2.4 Fold and Decide: the pure core
 
 `internal/convergence` is plain Go with no Kubernetes imports. It exposes two
-pure functions, and they are the primary unit-test target:
+pure functions, and they are the primary unit-test target. This section is
+the semantic overview; the executable contract — exact types, comparisons,
+edge-case rulings, and the full test matrix — lives in `CONVERGENCE.md`,
+which is normative for the implementation:
 
 ```go
 // Fold applies one completed execution to the view: adopts the result
@@ -266,8 +270,11 @@ fresh retries because the workspace moved.
 1  if v.Oscillation                          → Escalate("oscillation")
 2  if spend.wallClock  > budgets.wallClock   → Escalate("wall-clock")
 3  if spend.tokens     > budgets.tokens      → Escalate("token-budget")
-4  if any step s has s.InfraRetries >= budgets.infraRetries
-                                             → Escalate("infra", s)
+4  if the driver, or any BLOCKING gate, has InfraRetries >= budgets.infraRetries
+                                             → Escalate("infra", step)
+   # infra exhaustion escalates only where no fallback exists: an exhausted
+   # fix action degrades to the driver, an exhausted non-blocking gate is
+   # tolerated (CONVERGENCE.md, ruling R1)
 
 # ---- walk steps in topological order of `after`, ties by declaration ----
 5  for step in plan.steps:
@@ -281,15 +288,23 @@ fresh retries because the workspace moved.
      if g.Result == Passed:                   # invalidation guarantees
         continue                              #   verifiedSnapshot == current
      if g.Result == Unknown                  → RunGate(step)
-     if g.Result == Errored                  → RunGate(step)   # fresh attempt;
-                                              # preamble bounds the retries
+     if g.Result == Errored:
+        if g.InfraRetries < budgets.infraRetries
+                                             → RunGate(step)   # fresh attempt
+        continue           # only non-blocking gates reach this line (blocking
+                           # exhaustion escalated in the preamble); a gate that
+                           # cannot run must not block Done if a failing one
+                           # would not have
      if g.Result == Failed:
         if !step.Blocking                     → continue  # recorded, tolerated
         if step.FixAction != nil
            && g.FixAttemptedAt != v.CurrentSnapshot
            && g.FixAttempts < budgets.fixAttemptsPerGate
+           && v.Actions["<step>@fix"].InfraRetries < budgets.infraRetries
                                              → RunAction("<step>@fix",
                                                          FixAction(step))
+                                             # a fixer with dead infra is
+                                             # skipped, not escalated (R1)
         if v.DriverRuns >= budgets.maxDriverRuns
                                              → Escalate("driver-runs", step)
                                              → RunAction(plan.Driver,
@@ -314,7 +329,8 @@ Properties worth stating because their absence was a v1 bug:
   in status and events, and never blocks `Done`, never burns a fix, never
   short-circuits the walk. Non-blocking gates still *run* (the Unknown branch
   applies to every gate), so `Done` implies every gate reported at the final
-  snapshot; only blocking gates must pass.
+  snapshot — the one tolerated exception is a non-blocking gate whose
+  executor is infra-exhausted (R1) — and only blocking gates must pass.
 - **A no-op task cannot succeed.** The driver is a step; a never-run Action
   returns `RunAction` before the walk can reach `Done`. `Done` therefore
   implies the driver completed at least once, even when the base tree already
@@ -339,7 +355,7 @@ Exactly five conditions, all checked in the pure core:
 | Oscillation | A newly produced snapshot equals a non-parent ancestor in lineage | `Failed("oscillation")` |
 | Driver runs | `DriverRuns` reaches `budgets.maxDriverRuns` while a blocking gate is failed | `Failed("driver-runs")` |
 | Wall clock | Active runtime — accumulated since `Provisioned`, excluding time spent `Suspended` — exceeds `budgets.wallClock` | `Failed("wall-clock")` |
-| Infrastructure | A step's **consecutive** `Errored` executions reach `budgets.infraRetries` | `Failed("infra")` |
+| Infrastructure | The driver's or a **blocking** gate's consecutive `Errored` executions reach `budgets.infraRetries` — an exhausted fix action degrades to the driver, an exhausted non-blocking gate is tolerated (R1) | `Failed("infra")` |
 
 Token exhaustion folds into the wall-clock/budget family
 (`Failed("token-budget")`). The diff-size ratchet from v1 is deferred: it is a
@@ -1221,8 +1237,11 @@ namespace-matching controller returns with multi-tenancy.)
 
 ### Step 1 — Pure logic, no Kubernetes
 
-`internal/convergence` as plain Go with table-driven tests. Required coverage,
-each of which encodes a decision from this document:
+`internal/convergence` as plain Go with table-driven tests. `CONVERGENCE.md`
+is the normative contract for this step: it enumerates the concrete case
+matrix (C01–C35), the property/fuzz suite, the world-model harness, and the
+termination bound the tests assert. The list below is the summary the cases
+pin; each bullet encodes a decision from this document:
 
 - Default `["**"]`: a gate without globs is cleared by any change
 - Carry-forward on glob miss, including the `verifiedSnapshot` re-stamp
@@ -1243,7 +1262,9 @@ each of which encodes a decision from this document:
 - The last budgeted fix is always observed: a gate left Unknown by the final
   driver run is re-run, never escalated past
 - Errored (gate or action): retries up to `infraRetries` consecutive
-  failures, then escalates as infra, and burns no fix or driver budget
+  failures, then escalates as infra for the driver and blocking gates; an
+  exhausted fix action degrades to the driver and an exhausted non-blocking
+  gate is tolerated at `Done` (R1); errors burn no fix or driver budget
 - Infra reset: a success resets a step's consecutive count — two transient
   errors separated by a success never escalate; a snapshot change alone
   resets nothing
@@ -1394,6 +1415,13 @@ the base tree is never success — the driver's work is part of the fixed point.
 | 21 | Workflows could author multiple Action steps with run-once semantics | Exactly one authored Action — the driver — enforced at admission | Extra authored actions had defined but degenerate semantics (run exactly once, ever): a rerun-expectations trap with no Phase 1 use |
 | 22 | Wall clock = age since task creation | Active runtime: accumulates from `Provisioned`, pauses while `Suspended` | Suspension and admission waits consumed budget, contradicting suspend-and-resume and failing parked tasks that never ran |
 | 23 | `DriverAttempts`; gate non-mutation asserted | `DriverRuns`/`maxDriverRuns`; gates run on read-only mounts with a snapshot-echo backstop (real executors) | "Attempts" read as remediation-only, excluding the initial run; "gates never mutate" needed a mechanism, not an assumption. Synthesized `@` identities are sanitized in object names (`@` is not DNS-1123) with identity preserved in the hashed suffix |
+
+### v2.1 → v2.2 (with CONVERGENCE.md)
+
+| # | v2.1 | v2.2 | Why |
+|---|---|---|---|
+| 24 | Infra exhaustion escalated uniformly for any step | Escalates only where no fallback exists — the driver and blocking gates; an exhausted fix action degrades to the driver, an exhausted non-blocking gate is tolerated at `Done` (ruling R1) | Uniform escalation let a broken fixer, or a broken gate that by definition cannot block `Done`, kill a task that had a defined fallback |
+| 25 | Test coverage as a bullet list | `CONVERGENCE.md`: the normative package contract — exact types, `Fold` validation errors, glob dialect, Done predicate, an asserted termination bound, cases C01–C35, properties P1–P7 (including the world-model stale-green hunt), golden traces, fuzz targets | The bullets encoded decisions but not executable expectations; the pure core is the part worth validating exhaustively before Kubernetes enters |
 
 ## Appendix B — Reserved concepts (deferred, not discarded)
 
