@@ -1,29 +1,63 @@
 \section{Declarative Workflow Specification}
 \label{sec:workflow}
 
-% 1.5-2 pages.
+% 1.5-2 pages. Normative source: implementation.md sections 3 and 4.
 
 \subsection{Capability versus composition}
-% \AgentStepClass (cluster-scoped, admin): images, commands, executor, timeout,
-%   evidence format, autofix, catalog dependencies. This is CAPABILITY.
-% \AgentWorkflow (namespaced, team): which classes, dependency edges,
-%   invalidation globs, candidates, budgets, selection. This is COMPOSITION ONLY.
-% Security consequence: a tenant authoring a workflow cannot introduce an image.
-% RBAC falls out: write on workflows, read-only on classes.
+% \AgentStepClass (cluster-scoped, admin): kind = Action | Gate; executor,
+%   image, command, timeout. Gate-only: blocking, fixAction (an Action class),
+%   evidence format, scope (tree | diff). Action-only: turn and token budgets.
+%   This is CAPABILITY. The kind split replaces a matrix of behavioural
+%   booleans and makes the invalid combinations unrepresentable.
+% \AgentWorkflow (namespaced, team): driver, steps (name, class, after,
+%   invalidatedBy), budgets. This is COMPOSITION ONLY. A workflow step carries
+%   no behavioural field at all -- there is nothing to reject because there is
+%   nothing to write.
+% Security consequence: a tenant authoring a workflow cannot introduce an
+%   image, change what a step is, or weaken a gate. RBAC falls out: write on
+%   workflows and tasks, read-only on classes and policy.
 
 \subsection{Declaring dependencies and invalidation}
 % after: cost ordering and fail-fast.
-% invalidatedBy: the ledger's invalidation rules, as data rather than code.
+% invalidatedBy: the ledger's invalidation rules, as data rather than code;
+%   default ["**"] (Section 6.2).
+% Exactly one authored action per workflow, the driver [impl]. Fix actions are
+%   synthesised at resolution as <gate>@fix, never authored; multi-action
+%   workflows return only with defined re-run semantics [spec].
 % Include the minimal and the full example listings side by side.
 
 \subsection{Resolution and version pinning}
-% Resolution order: explicit ref, tag match, repo match, sole workflow, default.
+% Resolution: an explicit workflowRef [impl]; tag match, repo match, sole
+%   workflow, default [spec, with the tracker connectors].
 % SECURITY: never resolve from ticket free text. Body and comments are writable
 % by anyone with issue access, including the agent. Resolve from trusted
 % structured fields only, once, at admission, before any agent code runs.
-% Pin specHash: editing a workflow mid-flight would silently void ledger entries.
+% Pin the COMPLETE executable interpretation, not a hash: workflow, policy,
+%   every referenced class by content, injected gates, budgets -- the resolved
+%   plan, written once into status and frozen by a CEL transition rule.
+%   Editing a workflow or a class mid-flight then cannot change a running
+%   task's gate set, images or commands. State the trade-off honestly: a pinned
+%   task keeps running a gate image an admin has since patched; superseding a
+%   running task is a policy decision, not something pinning should be relaxed
+%   to achieve.
+
+\subsection{Admission without webhooks}
+% Structural rules, enums and immutability transitions are CEL validation on
+%   the CRDs; everything cross-object (class existence, kind consistency, DAG,
+%   ceilings, injection) is controller admission -- authoritative because its
+%   result is pinned in the same step. No certificates, no failure-policy
+%   decisions, no race between a webhook's view and the controller's.
+% Budgets above policy ceilings are rejected, never clamped. No policy present
+%   admits nothing.
 
 \subsection{Non-composable integrity requirements}
-% \AgentWorkflowDefaults injects required integrity steps via mutating webhook.
+% \AgentClusterPolicy names required gates by concrete class. They are injected
+%   into the RESOLVED PLAN at admission -- not written into the team's workflow
+%   object by a mutating webhook -- under a reserved identity (<name>@policy)
+%   that no authored step can occupy; always blocking, always invalidated by
+%   any change. An authored step of the same class never satisfies the
+%   requirement: its after and invalidatedBy are team-controlled, so honouring
+%   it would let a workflow shadow the gate with a weakened copy. A duplicate
+%   run is the cheap outcome.
 % A tenant must not be able to compose away the suppression meta-gate.
 % Forward-reference Section 9.

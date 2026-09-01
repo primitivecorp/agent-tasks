@@ -2,6 +2,10 @@
 \label{sec:candidates}
 
 % 1-1.5 pages. Merge into Section 6 if page budget is tight.
+% STATUS: [spec]. The implementation is single-candidate; a task owns one
+% snapshot lineage, one ledger view, one spend counter. When multi-candidate
+% lands, an AgentCandidate owns those per candidate and the rules below apply
+% across candidates. Write this section in that voice -- design, not report.
 
 \subsection{Diversity and failure independence}
 % Resampling at higher temperature is weak: same solution, different names.
@@ -22,7 +26,7 @@
 % diffs may all apply cleanly and produce something no agent understands.
 % It also voids the ledger -- the composed tree was validated by nobody.
 % What works instead: pick a winner, feed the losers' diffs as review input,
-% one agent integrates, gates re-run on a normal tree hash.
+% one agent integrates, gates re-run on a normal snapshot.
 
 \subsection{Fan out cheap, converge before expensive}
 % Fan out across phase-0 gates (in-sandbox, no catalog dependencies).

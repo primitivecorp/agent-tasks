@@ -14,13 +14,19 @@
 % misleading and reviewers check for exactly this.
 
 \subsection{Convergence behaviour}
-% Turns per gate. Escalation reason distribution (oscillation-heavy => gates
-% conflict; budget-heavy => ladder too slow). Gate evidence quality as a
+% Driver runs and gate runs per task. Escalation reason distribution across the
+% five terminal reasons: oscillation, driver-runs, wall-clock, token-budget,
+% infra. Read it: oscillation-heavy => gates conflict; driver-runs-heavy => the
+% remediation ladder is too slow or a gate is unfixable; infra-heavy => the
+% executor, not the model. Fix-action yield: the fraction of gate failures a
+% fix action resolves before a driver run is spent. Gate evidence quality as a
 % confound: bad error output is often the actual bug.
 
 \subsection{Invalidation efficiency}
-% Post-rebase gate survival rate. Gate-runs avoided by path scoping, as a
-% percentage. These validate the central claim of Section 6.
+% Post-rebase gate survival rate, split by tree-scoped and diff-scoped gates.
+% Gate-runs avoided by path scoping, as a percentage, against the closed
+% default -- the difference is the compute the invariant costs (Section 9.3);
+% report it as such. These validate the central claim of Section 6.
 
 \subsection{Cost}
 % Decomposed by axis, not a single dollar figure. Feeds the table in 8.6.
@@ -30,7 +36,7 @@
 %   tokens per merged PR
 
 \subsection{Safety}
-% Meta-gate rejection rate. Whether it rises with N -- the prediction from 9.3.
+% Meta-gate rejection rate. Whether it rises with N -- the prediction from 9.4.
 % Audit-catch rate.
 
 \subsection{Trust over time}
@@ -42,4 +48,5 @@
 %     latter, verification density has a ceiling and we must say so.
 
 \subsection{Threats to validity}
-% Single repo, single organisation, small N, short window, one model family.
+% Single repo, single organisation, small N, short window, one model family,
+% single-candidate and single-flight execution.

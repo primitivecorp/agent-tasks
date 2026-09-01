@@ -1,25 +1,50 @@
 \section{Architecture}
 \label{sec:arch}
 
-% 3-4 pages.
+% 3-4 pages. Normative source: implementation.md sections 3, 5 and 6.
 
 \subsection{Resource model}
-% Six CRDs. Table: kind / scope / writer / purpose.
-% \AgentTask (ns), \AgentStep (ns), \AgentWorkflow (ns), \TrackerConnection (ns),
-% \AgentStepClass (cluster), \AgentWorkflowDefaults (cluster singleton).
-% \AgentStep is Job-shaped: short-lived execution handle, content-keyed name,
-% TTL after completion. The name IS the idempotency key.
+% Table: kind / scope / writer / purpose.
+% \AgentTask (ns; human or connector), \AgentStep (ns; operator),
+% \AgentWorkflow (ns; team), \AgentStepClass (cluster; admin),
+% \AgentClusterPolicy (cluster; admin -- a singleton named default [impl],
+% namespace selectors arriving with multi-tenancy [spec]), \TrackerConnection
+% (ns; connector phase [spec]).
+% \AgentStep is a self-contained, immutable execution record: everything the
+% executor needs is copied from the resolved plan into its spec, so executing
+% it reads no mutable object. Its content-keyed name is derived from stored
+% counters, and the name IS the idempotency key. TTL after completion is
+% operator logic -- a CRD gets no ttlSecondsAfterFinished for free.
 
-\subsection{Controllers and the projection chain}
-% Postgres (facts) -> AgentTask.status (materialised) -> tracker (rendered).
-% Nothing authoritative in two places.
+\subsection{Controllers and the convergence core}
+% Two controllers. The task controller is a thin shell around two pure
+% functions: it feeds completed \AgentStep results to \fold, persists the
+% bounded view, calls \decide, and materialises the answer. Single-flight
+% [impl]: one execution at a time, so a mutation never lands under an
+% in-flight gate; parallel gates are a later phase [spec].
 % CRITICAL: the operator must not run the agent inside Reconcile. An LLM turn is
 % a long, expensive, non-idempotent side effect; reconcile is level-triggered.
-% The operator creates AgentSteps and observes them.
+% Executor contract: Ensure(executionID, spec) / Poll / Cancel. Ensure is
+% idempotent by construction -- the controller may call it any number of times
+% -- which makes crash recovery natural rather than bolted on. Contrast with
+% dispatch-then-record-a-handle, which is at-least-once however carefully the
+% handle is guarded.
+% Lifecycle: success cleanup is ordinary reconciliation (Validated -> release
+% -> Succeeded, after the work namespace is observed gone); the finalizer is
+% the deletion path only. Suspend cancels the in-flight execution and retains
+% workspace and view; the wall-clock budget pauses.
 
 \subsection{Isolation and placement}
+% One work namespace per task: the isolation and networking boundary for
+% everything derived from the agent's workspace (default-deny network
+% policies, quota, permitted runtime classes, materialised from the policy
+% template). Created at provisioning, released on success, retained for
+% post-mortem on failure, torn down explicitly on deletion -- a namespaced
+% object cannot own a Namespace, so none of this is garbage-collected for free.
 % microVM (Kata/Firecracker) on bare metal for anything derived from the
-% agent's workspace; pinned-digest catalog images on elastic shared-kernel nodes.
+% agent's workspace; pinned-digest catalog images on elastic shared-kernel
+% nodes. Gates run against read-only workspace mounts, with the executor
+% echoing the input snapshot as a backstop.
 % PROVENANCE RULE, enforced by ValidatingAdmissionPolicy:
 %   images matching sandbox/* MUST set runtimeClassName kata-* and live in a
 %   work namespace.
@@ -28,8 +53,13 @@
 % microVM rather than a distributed filesystem.
 
 \subsection{State: hot path and follower}
-% etcd for the control plane and the live ledger; it is the ONLY thing on the
-% reconcile path. A separate projector appends facts to Postgres.
+% etcd holds the control plane and the ledger's BOUNDED working set: current
+% snapshot, the full-but-bounded snapshot lineage, per-gate result and
+% verified snapshot, explicit counters (never derived from history), spend,
+% the one active execution. It is the ONLY thing on the reconcile path.
+% Nothing authoritative in two places: status is authoritative for
+% reconciliation; a separate projector appends facts to Postgres for history,
+% evidence and the read API [spec]; connectors render from status to trackers.
 % Postgres down => history stops accruing, pipeline keeps running. Not tier-1.
 % Contrast with Argo, whose offloaded status IS on the reconcile path.
 % Gap-free projection: AgentStep finalizer released only after the append commits.
@@ -54,6 +84,9 @@
 %   affected_gates  <- path-scoped invalidation, affected-target scoping
 %   candidates      <- pressure-sensitive N
 %   inference       <- self-hosted GPU converts variable to fixed
+% The closed invalidation default spends verification compute for safety;
+% report its measured overhead against an open default as the price of the
+% invariant, not as waste.
 % State plainly: absolute figures depend on instance mix, repo size, gate suite,
 % model choice, and rented-vs-owned inference. Numbers are a single-configuration
 % datapoint, not a general model. Readers should reproduce on their workload.

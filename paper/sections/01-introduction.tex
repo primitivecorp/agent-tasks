@@ -14,18 +14,26 @@
 %     tree is immutable for the duration of the run. Nodes execute once.
 %   - Agent frameworks (LangGraph, OpenHands, SWE-agent): model the reasoning
 %     loop but provide no isolation, no capacity model, no cluster primitives.
-% Neither treats verification state as a first-class, re-entrant artifact.
+% Neither treats verification state as a first-class, re-entrant artifact, and
+% neither separates the step that changes the tree from the step that judges it.
 
 \subsection{Contributions}
 % Enumerate 5. Draft:
 %   (C1) A formulation of agent scaling as a verification-capacity problem, with
 %        verification density as the tunable parameter.
-%   (C2) A content-addressed verification ledger with path-scoped invalidation,
-%        giving well-defined convergence and termination for a mutating tree.
-%   (C3) A declarative workflow specification that separates capability (cluster
-%        admin) from composition (team), with non-composable integrity gates.
+%   (C2) A content-addressed verification ledger with default-closed,
+%        path-scoped invalidation and a pure convergence core (\fold, \decide),
+%        giving well-defined convergence and a computable termination bound for
+%        a tree that mutates between gate runs.
+%   (C3) A declarative workflow specification that separates capability
+%        (cluster admin: what a step IS -- action or gate) from composition
+%        (team: which steps, in what order, invalidated by what), with
+%        integrity gates injected by policy at plan resolution so that no
+%        workflow can compose them away or shadow them with a weaker copy.
 %   (C4) A threat model for agent-authored code in a shared cluster, including
-%        gate-gaming as adversarial selection pressure under best-of-N.
-%   (C5) An open-source Kubernetes implementation and a measured cost datapoint.
+%        gate-gaming as adversarial selection pressure under best-of-N and the
+%        observation that invalidation defaults are a security property.
+%   (C5) An open-source Kubernetes implementation -- five CRDs, two controllers,
+%        no admission webhooks -- and a measured cost datapoint.
 
 \todo{Draft after Section 2 and Section 6 settle.}

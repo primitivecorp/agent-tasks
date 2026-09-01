@@ -93,13 +93,22 @@
 \newcommand{\AgentStep}{\crd{AgentStep}}
 \newcommand{\AgentWorkflow}{\crd{AgentWorkflow}}
 \newcommand{\AgentStepClass}{\crd{AgentStepClass}}
-\newcommand{\AgentWorkflowDefaults}{\crd{AgentWorkflowDefaults}}
+\newcommand{\AgentClusterPolicy}{\crd{AgentClusterPolicy}}
 \newcommand{\TrackerConnection}{\crd{TrackerConnection}}
 \newcommand{\Sandbox}{\crd{Sandbox}}
 
-\newcommand{\nextaction}{\textsc{next-action}\xspace}
-\newcommand{\treehash}{\ensuremath{h}}
+% The pure convergence core is two functions (implementation.md, section 11).
+\newcommand{\fold}{\textsc{fold}\xspace}
+\newcommand{\decide}{\textsc{decide}\xspace}
+% Math symbols: no \xspace, so write \snapshot{} where prose follows.
+\newcommand{\snapshot}{\ensuremath{h}}
+\newcommand{\gatekey}{\ensuremath{\kappa}}
 \newcommand{\ledger}{\ensuremath{\mathcal{L}}}
+
+% Outline convention used in the section stubs:
+%   [impl]  shipped by the Phase 1 implementation (implementation.md)
+%   [spec]  specified there but delivered in a later phase
+% The prose must not present a [spec] item as if it were running.
 
 % Drafting aids. Comment out the definitions below before submission.
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}} % chktex 13

@@ -6,12 +6,18 @@
 \subsection{Anatomy of the convergence loop}
 % Walk a real ticket: edit, lint, typecheck, unit, integration, review.
 % 50-200 edit-run cycles. Emphasise: the tree mutates between every gate run.
+% Name the two kinds of step the loop contains and keep them apart from here
+% on: ACTIONS change the tree (the agent's edit, a formatter's fix); GATES judge
+% it (lint, typecheck, tests). An action is done or not done; a gate's verdict
+% is about one snapshot and no other.
 
 \subsection{Why one-shot execution fails}
 % The core observation. A DAG engine node fires once when dependencies are
 % satisfied. A gate must fire repeatedly as the tree changes.
 % NOTE: do NOT frame this as "graphs vs DAGs" -- our dependency graph IS acyclic
-% and is webhook-enforced to be so. The contrast is EXECUTION SEMANTICS:
+% and admission-enforced to be so (CEL rules plus controller-side plan
+% resolution; there are no admission webhooks). The contrast is EXECUTION
+% SEMANTICS:
 %   one-shot topological execution  vs.  content-addressed level-triggered convergence.
 % Table: topology / trigger / node identity / completion criterion.
 
@@ -21,8 +27,12 @@
 
 \subsection{Requirements}
 % R1 verification results must be re-entrant and content-keyed
-% R2 invalidation must be path-scoped or cost grows superlinearly
+% R2 invalidation must be path-scoped or cost grows superlinearly -- and it
+%    must fail closed, or scoping becomes a way to skip verification
 % R3 agent-authored artifacts must not run on shared kernels
-% R4 the agent must not be able to weaken its own verification
+% R4 the agent must not be able to weaken its own verification (this becomes:
+%    policy-owned gates, class-only behaviour, spec the agent cannot write)
 % R5 capacity is finite and non-elastic at the isolation layer
 % R6 tracker integration must not leak into the core
+% R7 the decision procedure must be pure: testable without a cluster and
+%    replayable after a controller crash

@@ -2,6 +2,8 @@
 \label{sec:threat}
 
 % 2-3 pages. Most novel material in the paper. Consider cross-listing cs.CR.
+% Normative source: implementation.md section 6 (invariants), section 4
+% (admission).
 
 \subsection{Trust boundaries}
 % What kernel isolation buys: protection of the host kernel and the rest of the
@@ -16,9 +18,26 @@
 % locally optimal move. Enumerate: noqa, type-ignore, eslint-disable, skip
 % markers, deleted assertions, ignore-file additions, lowered thresholds,
 % --no-verify.
-% The suppression meta-gate: runs on the DIFF, not the tree. Rejects gate-config
-% modification, net-new suppressions, test deletion, assertion-count decrease,
-% gate binary/version changes.
+% The suppression meta-gate: runs on the DIFF, not the tree -- in the model, a
+% gate class with scope: diff, keyed on (base revision, snapshot). Rejects
+% gate-config modification, net-new suppressions, test deletion,
+% assertion-count decrease, gate binary/version changes.
+% How it is made unremovable (Section 7.5): named by the cluster policy,
+% injected into the resolved plan under a reserved identity, always blocking,
+% always invalidated by any change, never satisfied by a workflow-authored
+% look-alike. Three independent choices have to hold for this to be true; name
+% each and say what breaks without it.
+
+\subsection{Defaults that fail closed}
+% The invalidation default is a security property, not a tuning knob. Under an
+% open default (undeclared invalidatedBy = never invalidated), an injected
+% integrity gate passes once against the base tree and carries forward while
+% the agent edits: the tenant cannot remove the gate, but the defaulting removes
+% it for them. Hence: closed default (["**"]); over-invalidation whenever a
+% change report is truncated or contradictory; failed results carrying forward
+% exactly like passed ones. Walk the reader through the failure that an early
+% draft of the implementation actually contained -- it is the most convincing
+% argument for the rule.
 
 \subsection{Best-of-N as adversarial selection pressure}
 % KEY INSIGHT. With N=1 you get an agent that occasionally games a gate. With
@@ -42,7 +61,17 @@
 % The credential never enters the sandbox: the agent commits locally and the
 % broker PULLS, so a compromised sandbox has nothing to steal.
 % Repo-scoped, short-lived tokens with minimal permissions.
+% The agent never writes spec: all of its influence enters through step
+% results and evidence. Task spec is frozen after creation except suspend;
+% status is writable only by the operator; the resolved plan is set once and
+% frozen by a CEL transition rule, so nothing the agent does -- and no later
+% edit to a class or workflow -- changes the gate set, images or budgets of a
+% running task.
+% Evidence is never trusted from the agent-writable workspace: executors
+% produce it from tool output and copy it out, and gates run on read-only
+% mounts.
 
 \subsection{Residual risks}
 % Be honest. Post-merge validation (Section 12) is the external check that
-% gaming cannot reach, but it is sampled, not exhaustive.
+% gaming cannot reach, but it is sampled, not exhaustive. Evidence excerpts in
+% status are summaries; post-hoc audit needs the durable evidence store [spec].

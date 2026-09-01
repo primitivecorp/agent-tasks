@@ -27,8 +27,10 @@
 
 \subsection{Verification compounds; review does not}
 % A human review does not accumulate. A gate, once written, applies to every
-% subsequent task forever. Findings become tests (see Section 12). This is the
-% mechanism by which trustworthiness compounds and N scales.
+% subsequent task forever. Findings become tests (see Section 12). Give the
+% compounding its concrete mechanism: a finding becomes a gate class, and the
+% cluster policy can require that class in every plan it admits from then on.
+% This is how trustworthiness compounds and N scales.
 
 \subsection{The autonomy dial}
 % Two knobs, per workflow, per risk class:
@@ -36,8 +38,13 @@
 %   mergePolicy:      Manual | AutoOnGreen | AutoWithSampledAudit
 % Position on the dial is a function of measured verification density, not a
 % philosophical stance. Interactive mode is a workflow-development affordance.
+% Be explicit about status: the implementation ships Fail and manual merge
+% [impl]; Retry, Elicit and the auto-merge policies are specified [spec] and
+% land with the tracker connectors and the post-merge loop. Do not describe the
+% dial as if every position were already turnable.
 
 \subsection{Trust is purchased with compute}
 % Raising verification density multiplies compute across tasks x gates x
 % candidates. Verification is the CHEAP axis (elastic, shared-kernel) which is
-% why the substitution is economically viable at all. Forward-reference 8.6.
+% why the substitution is economically viable at all. The invalidation default
+% (Section 6.2) deliberately spends more of it for safety. Forward-reference 8.6.
