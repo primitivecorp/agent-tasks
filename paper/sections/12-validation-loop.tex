@@ -2,6 +2,7 @@
 \label{sec:validation}
 
 % ~1.5 pages. This section carries the thesis empirically. Do not cut it.
+% STATUS: [spec] -- lands with merge policies and the tracker connectors.
 
 \subsection{Intent validation is above the gaming layer}
 % Gates verify correctness against specification; they are attackable by the
@@ -14,7 +15,9 @@
 \subsection{Failure is a normal outcome}
 % Post-merge validation failure must be as cheap and structured as a gate
 % failure: revert, new task carrying the finding, and -- the important part --
-% the finding becomes a gate so it cannot recur.
+% the finding becomes a gate so it cannot recur. Concretely: a new gate class,
+% made mandatory through the cluster policy's required gates, injected into
+% every plan admitted from then on (Section 7.5).
 
 \subsection{Compounding trust}
 % This loop is the mechanism by which the system becomes more trustworthy over

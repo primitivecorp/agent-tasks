@@ -7,7 +7,7 @@
 # Warning 1, "command terminated with space". These macros are defined with
 # \xspace in main.tex, which handles the trailing space correctly. ChkTeX has
 # no way to know that.
-Silent { \sysname \nextaction \AgentTask \AgentStep \AgentWorkflow }
+Silent { \sysname \fold \decide \AgentTask \AgentStep \AgentWorkflow }
 
 # Warning 24, "delete this space to maintain correct page references", fires
 # on the \section{...} then \label{...}-on-the-next-line convention used in

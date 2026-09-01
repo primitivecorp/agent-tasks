@@ -1,11 +1,14 @@
 \section{Issue Tracker Integration}
 \label{sec:tracker}
 
-% 1-1.5 pages.
+% 1-1.5 pages. STATUS: [spec] -- the connector phase. The core is built so
+% that nothing here has to touch it.
 
 \subsection{A provider-neutral status vocabulary}
-% status.plan, status.question, status.conditions render as a Linear agent plan,
-% a Jira checklist comment, or a GitHub task list.
+% status.conditions and the gate-state view (current snapshot, per-gate result
+% and verified snapshot, spend) render as a Linear agent plan, a Jira checklist
+% comment, or a GitHub task list. A rendered plan and an elicitation question
+% are connector-phase additions to status; keep them out of the core until then.
 % Design rule: if a status field only makes sense because one tracker has a
 % corresponding concept, it belongs in the connector, not the core.
 
@@ -14,6 +17,8 @@
 % AgentTask.status -> connector (watch) -> tracker
 % The operator never calls the tracker. A connector crash is harmless: on
 % restart it re-projects from current status. No replay logic.
+% Selection from tracker metadata (tag, repo, default) resolves from trusted
+% structured fields only, never ticket text (Section 7.3).
 
 \subsection{Webhook plus reconciling sweep}
 % Webhooks are lossy. The sweep is not hygiene -- it is what stops abandoned
@@ -21,6 +26,9 @@
 % closed mid-run, delegation removed, failed projection.
 
 \subsection{Interactive mode}
-% Elicitation as a workflow-development affordance, not a core state. Default
-% escalation policy is Fail, because a system that scales by asking more
-% questions re-centralises the bottleneck it exists to remove.
+% Elicitation as a workflow-development affordance, not a core state [spec].
+% Default escalation policy is Fail [impl], because a system that scales by
+% asking more questions re-centralises the bottleneck it exists to remove.
+% Elicitation must checkpoint the workspace before releasing anything: the
+% implementation's suspend keeps the workspace and pauses the wall clock for
+% exactly this reason.

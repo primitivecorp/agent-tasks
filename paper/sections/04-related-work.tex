@@ -8,12 +8,16 @@
 % Argo is the closest comparison: has memoization, but keyed on a user-supplied
 % cache key, not content-addressed with cascading invalidation. Acyclic by
 % definition; loops require recursion templates. Node status hits the etcd
-% object limit, motivating status offloading -- evidence for our design.
+% object limit, motivating status offloading -- evidence for our design: we
+% keep only the bounded working set the reconciler needs in status and project
+% history out (Section 8.4), so the limit is designed around rather than hit.
 
 \subsection{Build systems: our actual lineage}
 % Bazel, Nix, Buck, Nx. Build Systems a la Carte for the formal vocabulary.
 % Claim the lineage explicitly: our ledger is a build system's incrementality
-% model applied to a tree that an agent mutates rather than a human.
+% model applied to a tree that an agent mutates rather than a human. The gate
+% key includes the resolved verifier, so redefining a gate invalidates its
+% results exactly as changing a compiler invalidates its objects.
 % Difference: build systems assume the tree is fixed during a build.
 
 \subsection{Agent frameworks and benchmarks}
@@ -27,4 +31,5 @@
 % task-orchestration layer directly above it.
 
 \subsection{Kubernetes extension patterns}
-% Operator pattern, CRDs, Kueue for admission, level-triggered reconciliation.
+% Operator pattern, CRDs, CEL validation rules as the webhook-free admission
+% path, Kueue for admission, level-triggered reconciliation.

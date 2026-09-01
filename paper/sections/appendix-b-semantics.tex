@@ -1,11 +1,83 @@
 \section{Invalidation Semantics}
 \label{app:semantics}
 
-% Formal statement of:
-%   - the ledger as a partial function
-%   - the invalidation predicate over path globs
-%   - the fixed-point condition
-%   - termination under oscillation detection and bounded budgets
-% Include the proposition proof deferred from Section 6.4.
+% Formal statements for Section 6, following implementation.md section 11 (the
+% executable contract). Definitions first, then the fixed point, then the
+% termination proposition whose proof Section 6.4 defers here.
 
-\todo{Formalise after Section 6 stabilises.}
+\begin{definition}[Snapshot]
+  A snapshot \snapshot{} is the content identity of the workspace: the git
+  tree hash, with submodule and LFS pointers taken as tree content. Snapshots
+  are immutable. An action either produces a new snapshot or leaves the
+  current one unchanged.
+\end{definition}
+
+\begin{definition}[Gate key]
+  For a gate \(g\) with resolved specification \(s_g\) and a snapshot
+  \snapshot{}, the gate key is \(\gatekey(g, \snapshot) = H(\snapshot, s_g)\)
+  for a collision-resistant hash \(H\). A diff-scoped gate additionally
+  includes the base revision \(b\): \(\gatekey(g, \snapshot) = H(b, \snapshot,
+  s_g)\).
+\end{definition}
+
+\begin{definition}[Ledger]
+  The ledger is a partial function
+  \(\ledger : (g, \gatekey) \rightharpoonup \{\textsc{pass}, \textsc{fail}(e)\}\),
+  where \(e\) is evidence. Absence is \textsc{unknown}, and \textsc{unknown}
+  is what schedules a gate.
+\end{definition}
+
+\begin{definition}[Invalidation]
+  Let an action transform \snapshot{} into \(\snapshot'\) with changed path
+  set \(P\), and let \(I(g)\) be the glob set declared by gate \(g\), which
+  defaults to \(\{\texttt{**}\}\). The result of \(g\) carries forward to
+  \(\snapshot'\) if and only if \(P \cap \mathrm{paths}(I(g)) = \emptyset\);
+  otherwise it is absent at \(\snapshot'\). If \(P\) is reported truncated,
+  \(P\) is taken to be every path. The rule applies to \textsc{fail} results
+  exactly as to \textsc{pass}.
+\end{definition}
+
+\begin{definition}[Fixed point]
+  Let a task have driver \(d\), blocking gates \(B\) and non-blocking gates
+  \(N\). The task is at its fixed point at snapshot \snapshot{} if and only if
+  \(d\) has completed at least once, every \(g \in B\) has
+  \(\ledger(g, \gatekey(g, \snapshot)) = \textsc{pass}\), and every
+  \(g \in N\) either has a result at \snapshot{} or has exhausted its
+  infrastructure retries.
+\end{definition}
+
+\begin{definition}[Oscillation]
+  Let \(\snapshot_0, \ldots, \snapshot_k\) be the lineage of distinct
+  snapshots a task has occupied, with \(\snapshot_0\) the base. An action
+  producing \(\snapshot' \neq \snapshot_k\) oscillates if and only if
+  \(\snapshot' = \snapshot_i\) for some \(i < k\). An action producing
+  \(\snapshot' = \snapshot_k\) is a no-op and is not oscillation.
+\end{definition}
+
+\begin{proposition}[Bounded termination]
+  Let \(R\) be the cap on driver runs, \(F\) the number of gates that name a
+  fix action, \(A\) the per-gate cap on fix attempts, \(G\) the number of
+  gates, and \(E\) the cap on consecutive infrastructure failures of one step.
+  Every task reaches its fixed point or escalates after at most
+  \[
+    \bigl( (R + FA) + G\,(R + FA + 1) \bigr)\,(E + 1) + c
+  \]
+  executions, for a small constant \(c\).
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+  Each decision either terminates (\textsc{done}, \textsc{escalate}) or
+  schedules one execution that strictly consumes a bounded quantity. Driver
+  completions are bounded by \(R\) and fix completions by \(FA\), so completed
+  actions number at most \(R + FA\). Each new snapshot requires a completed
+  action, so the lineage has at most \(R + FA + 1\) entries. A gate re-runs
+  only after a new snapshot has cleared its result, so gate completions are
+  bounded by \(G\,(R + FA + 1)\). An infrastructure failure increments a
+  per-step counter that only a success of that step resets, so each step
+  suffers at most \(E\) failures per success and \(E\) more before escalating,
+  which gives the factor \(E + 1\). Oscillation, the wall-clock budget and the
+  token budget only tighten the bound. The implementation's property suite
+  asserts this arithmetic directly against generated execution sequences.
+\end{proof}
+
+\todo{Tighten the constant \(c\) once the property tests pin it.}

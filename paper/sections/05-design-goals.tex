@@ -8,8 +8,13 @@
 % G2 Declarative and Kubernetes-native: the CRDs are the contract.
 % G3 Capability/composition separation enforced by RBAC and admission.
 % G4 Tracker-neutral core: zero tracker-specific code in the operator.
-% G5 Standalone operation: kubectl apply with no external dependency.
-% G6 Sublinear verification cost via path-scoped invalidation.
+% G5 Standalone operation: kubectl apply with no external dependency -- and no
+%    admission webhooks; the install is CRDs plus one manager.
+% G6 Sublinear verification cost via path-scoped invalidation, without ever
+%    trading a false carry-forward for it.
+% G7 Determinism and replayability: a task is admitted once against a
+%    complete, immutable resolved plan; every decision is a pure function of
+%    recorded state and survives a controller crash unchanged.
 
 \subsection{Non-goals}
 % N1 We do not model the agent's internal reasoning loop.

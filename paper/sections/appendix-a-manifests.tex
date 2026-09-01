@@ -2,12 +2,16 @@
 \label{app:manifests}
 
 % Complete, runnable YAML for:
-%   - AgentStepClass (one gate, one autofix-capable, one with catalog deps)
+%   - AgentStepClass: a gate with a fixAction, the fix action it names, the
+%     driver (an Action class), and the integrity gate the policy requires
 %   - AgentWorkflow (minimal and full)
-%   - AgentWorkflowDefaults
+%   - AgentClusterPolicy (the singleton named default)
 %   - AgentTask (standalone, no tracker source)
 %   - RuntimeClass with scheduling and overhead
 %   - The provenance ValidatingAdmissionPolicy
 % Keep these in sync with the repo's test/e2e/testdata so they stay runnable.
+% Show the resolved plan for the full workflow once, so the reader sees the
+% injected <name>@policy gate and the synthesised <gate>@fix action that never
+% appear in the authored YAML.
 
 \todo{Populate from repository testdata once Phase 1 is green.}

@@ -2,8 +2,13 @@
 %   1. Autonomous coding agents produce code faster than humans can review it.
 %   2. Existing orchestration assumes an immutable tree; agents mutate it mid-run.
 %   3. We present a content-addressed verification model + a Kubernetes operator.
-%   4. Key mechanisms: (gate, tree-hash) ledger, path-scoped invalidation,
-%      capability/composition split, microVM isolation, post-merge validation loop.
+%   4. Key mechanisms: a ledger keyed by (gate, workspace snapshot) with
+%      default-closed, path-scoped invalidation; a strict split between actions
+%      (mutate the snapshot) and gates (assert properties of it), driven by a
+%      pure, exhaustively testable convergence core; capability/composition
+%      separation with policy-injected integrity gates no workflow can weaken;
+%      immutable resolved plans and idempotent execution; microVM isolation;
+%      a post-merge validation loop.
 %   5. Result: one measured datapoint on AWS. Fill from Section 13.
 %   6. Open source, Apache-2.0.
 

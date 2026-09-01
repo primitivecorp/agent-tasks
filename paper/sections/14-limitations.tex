@@ -8,6 +8,10 @@
 %   resist expression as gates.
 % - Sampled audit is not exhaustive; gaming that survives both gates and
 %   sampling is undetected by construction.
+% - The closed invalidation default trades compute for safety. Narrow declared
+%   scopes recover most of it -- but only where authors declare them.
+% - The implementation is single-candidate and single-flight: one execution at
+%   a time, no parallel gates. Both are specified, neither is built.
 % - Bare-metal capacity is the hard bound and provisions slowly.
 % - Single-controller throughput; sharding is future work.
 % - Evaluation is one repo, one organisation, one model family.
@@ -18,6 +22,9 @@
 % weakness -- it is where the system's contract begins.
 
 \subsection{Future work}
+% - Parallel gate execution: an instance dimension in the ledger key, and one
+%   driver run addressing every failure at a snapshot rather than one per cycle.
+% - Multi-candidate execution (Section 10) with per-candidate ledgers.
 % - Automatic gate synthesis from post-merge findings.
 % - Self-hosted inference: the crossover point where owned GPU capacity beats
 %   rented tokens is determined by utilisation and is computable from traces.

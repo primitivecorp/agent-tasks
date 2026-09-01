@@ -2,34 +2,92 @@
 \label{sec:ledger}
 
 % 3-4 pages. THE core section. Write this first, or second after Section 2.
+% Normative source: implementation.md section 2 (semantics) and section 11
+% (executable contract). Every claim here must trace to one of those.
 
 \subsection{Definitions}
-% Tree hash h: content hash of the workspace at a point in time.
-% Gate g: a deterministic predicate over a tree, producing pass/fail + evidence.
-% Ledger L: partial function (g, h) -> {pass, fail(e)}.
-% Formalise. Consider a \begin{definition} block per item.
+% Snapshot \snapshot: immutable content identity of the workspace (git tree
+%   hash; submodule and LFS pointers are tree content).
+% Action: a step that may mutate the workspace. Completing it yields a new
+%   snapshot or leaves the snapshot unchanged. An action has run-state, never
+%   validity -- it is not "green forever".
+% Gate g: a deterministic predicate over a snapshot, producing pass/fail plus
+%   evidence. A gate never mutates the workspace.
+% Driver: the one action the workflow designates as the agent. Runs once at
+%   task start, and again whenever a failed gate needs a fix that no cheaper
+%   fix action resolved.
+% Fix action: an ordinary action class referenced by a gate class; tried once
+%   per snapshot before a driver run is spent.
+% Gate key \gatekey = hash(snapshot, resolved gate specification): changing
+%   the verifier invalidates its old results, exactly as in a build system.
+% Ledger \ledger: partial function (g, \gatekey) -> {pass, fail(e)}.
+%   Kubernetes materialises it as a BOUNDED view (current result and verified
+%   snapshot per gate, explicit counters), not an append-only log (Section 8.4).
+% Formalise: one \begin{definition} block per item; Appendix B carries the
+% formal statements, keep this subsection readable.
+% The sentence to land: actions mutate state; gates assert properties of state.
+% Everything in the model follows from keeping those two apart.
 
 \subsection{Path-scoped invalidation}
 % Each gate declares invalidatedBy: a set of path globs.
 % On an edit producing h' from h, gate g retains its result iff
 %   diff(h, h') INTERSECT invalidatedBy(g) = empty set.
-% Corollary worth stating: a rebase is just another tree change, so a rebase
-% carrying an unrelated diff does not invalidate unrelated gates. This is what
-% makes high monorepo concurrency affordable.
+% THE DEFAULT IS CLOSED: an undeclared invalidatedBy means ["**"] -- any change
+% invalidates. Carry-forward is an explicit optimisation the author opts into.
+% Argue the asymmetry: a false carry-forward is a correctness and security bug;
+% an unnecessary re-run is merely expensive. (Section 9.3 shows how the open
+% default would have neutralised the injected integrity gate.)
+% Failed results carry forward under the same rule as passed ones; a truncated
+% or contradictory change report is treated as ["**"].
+% Two gate scopes: tree-scoped gates key on the snapshot alone; diff-scoped
+% gates (the suppression meta-gate, Section 9) key on (base revision, snapshot)
+% [spec].
+% Corollary worth stating: a rebase is just another tree change. It invalidates
+% diff-scoped gates and preserves tree-scoped ones whose paths it misses. This
+% is what makes high monorepo concurrency affordable -- and it is why the base
+% revision must NOT be folded into snapshot identity itself.
 
-\subsection{\nextaction as a pure function}
-% Include the pseudocode. Emphasise: no Kubernetes dependency, no I/O,
-% unit-testable against a synthetic ledger. Cost-ordered, fail-fast.
-% Autofix attempted before spending an agent turn.
+\subsection{\fold and \decide as pure functions}
+% Two functions, no Kubernetes dependency, no I/O, no clock:
+%   \fold(view, execution result) -> view: adopts the snapshot, applies
+%     invalidation, updates counters, detects oscillation.
+%   \decide(plan, view, budgets) -> RunAction | RunGate | Escalate | Done.
+% Include the pseudocode (implementation.md section 11.3). Points to make:
+%   - cost-ordered, fail-fast: steps walk in dependency order; a cheap failing
+%     gate short-circuits before an expensive one runs;
+%   - fix action before driver: remediation escalates in cost;
+%   - budgets guard REMEDIATION, never verification -- the last budgeted fix is
+%     always observed before any escalation;
+%   - blocking is honoured: a non-blocking failure is recorded and never blocks
+%     the fixed point;
+%   - the driver is a step: a task whose base tree already passes every gate
+%     still runs it. Verifying the base tree is never success.
+% Unit-testable against a synthetic ledger. The implementation's test matrix
+% (implementation.md section 11.7) is the evidence: cite case counts and the
+% property suite, not adjectives.
 
 \subsection{Termination}
-% Fixed point: all gates green against a SINGLE tree hash.
-% Oscillation: tree hash seen twice => cycle, break immediately.
-% Sliding-window per-gate attempt budget (not lifetime).
-% Global budgets: tokens, wall clock, expensive-gate runs.
-% Diff-size ratchet: monotonic growth with gates red => flailing, revert.
-% Consider a \begin{proposition} on termination under these conditions.
+% Fixed point: every blocking gate green against a SINGLE snapshot AND the
+%   driver completed at least once.
+% Oscillation: a newly produced snapshot equals a non-parent ancestor in the
+%   lineage => the loop is cycling; break immediately. A no-op action (the
+%   snapshot is unchanged) is NOT oscillation.
+% A lifetime cap on driver runs plus a per-gate cap on fix attempts replace
+%   the sliding-window budget of earlier drafts: with one driver the window
+%   bought nothing but complexity.
+% Global budgets: tokens; ACTIVE wall clock (accumulates from provisioning,
+%   pauses while suspended); consecutive infrastructure failures, escalating
+%   only where no fallback exists (driver, blocking gates) -- an exhausted fix
+%   action degrades to the driver, an exhausted non-blocking gate is tolerated.
+% Diff-size ratchet (monotonic growth with gates red => flailing, revert): an
+%   early-exit heuristic layered on termination, not part of it [spec].
+% \begin{proposition}: bounded termination with the explicit bound of
+%   implementation.md section 11.5 -- driver and fix runs bound snapshots,
+%   snapshots bound gate runs, consecutive-reset bounds errors. Proof sketch in
+%   Appendix B.
 
 \subsection{Comparison to one-shot execution}
 % Table from Section 3.2, expanded. This is where the reader should conclude
 % that a DAG engine cannot express this without becoming a ledger.
+% Add the row a pipeline cannot have: "gate result becomes unknown because the
+% tree changed underneath it" (line 17 of the reference trace).
