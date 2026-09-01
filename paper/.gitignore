@@ -8,6 +8,9 @@
 *.synctex.gz
 *.toc
 *.pdf
+# The built paper is committed so it can be read without a TeX toolchain;
+# rebuild with `make` before committing source changes.
+!main.pdf
 arxiv-build/
 arxiv.tar.gz
 .latexindent-cruft/
