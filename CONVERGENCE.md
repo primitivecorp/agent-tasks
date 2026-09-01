@@ -1,7 +1,7 @@
 # internal/convergence — Executable Contract and Test Specification
 
-Companion to `IMPLEMENTATION.md` (v2.2). Division of authority:
-`IMPLEMENTATION.md` §2 is normative for *semantics* — what the model means.
+Companion to `implementation.md` (v2.2). Division of authority:
+`implementation.md` §2 is normative for *semantics* — what the model means.
 This document is normative for the *implementation* — exact types, exact
 comparisons, edge-case rulings the spec leaves implicit, and the complete
 test matrix. Where this document is more precise, it wins; where it would
@@ -31,7 +31,7 @@ import-lint check in CI:
    `Plan.Steps` (a slice, fixed in topological order at resolution), never a
    map.
 4. **Value semantics.** `Fold` returns a new `View`; it never mutates its
-   argument. Views are small (§ IMPLEMENTATION 2.3 bounds them), so the deep
+   argument. Views are small (implementation.md §2.3 bounds them), so the deep
    copy is cheap and buys replayability: the controller can re-fold the same
    terminal execution after a crashed status write and get the same view.
 
@@ -317,7 +317,7 @@ caller handed the package garbage, and the returned view is unchanged:
 | `r.StepName` is a plan step or a synthesized `<gate>@fix` for a plan gate | `ErrUnknownStep` |
 | `r.Attempt == stored ExecutionAttempt + 1` | `ErrAttemptReplay` (**R5**: the controller folds and persists in one status write; a crash before the write re-folds the same result against the same stored counter, so a legitimate replay always presents `stored+1`. Anything else is a double-fold bug and must be loud, not absorbed.) |
 | `r.InputSnapshot == v.CurrentSnapshot` | `ErrStaleInput` (single-flight makes this impossible; loud beats silent) |
-| Gate with `Status == Completed` echoes `ResultSnapshot == InputSnapshot` (when set) | `ErrGateMutation` (defense in depth behind the executor-level check of IMPLEMENTATION §5.3) |
+| Gate with `Status == Completed` echoes `ResultSnapshot == InputSnapshot` (when set) | `ErrGateMutation` (defense in depth behind the executor-level check of implementation.md §5.3) |
 
 Then, by case — every rule below also increments the step's
 `ExecutionAttempt` (that is what frees the next deterministic AgentStep
@@ -408,7 +408,7 @@ Pinned to `github.com/bmatcuk/doublestar/v4` semantics:
 - Patterns match the **whole** repository-relative path, `/`-separated, no
   leading `./`, case-sensitive.
 - `**` spans directory separators; `*` does not.
-- The executor contract (IMPLEMENTATION §5.3) delivers paths in exactly this
+- The executor contract (implementation.md §5.3) delivers paths in exactly this
   normalized form; `Fold` does not re-normalize.
 
 A pattern that fails to compile is a plan-resolution error
@@ -532,7 +532,7 @@ paths under the loop.
 
 ### 7.5 Golden traces
 
-- **G1** — the fake-executor script of IMPLEMENTATION §5.3 encoded as a
+- **G1** — the fake-executor script of implementation.md §5.3 encoded as a
   scripted `World`; assert the exact decision sequence of the §10 reference
   trace, line for line (initial driver, lint fail, `lint@fix`, re-lint, unit
   fail, driver run 2, full re-verify at h3, Done).
@@ -578,7 +578,7 @@ Go native fuzzing:
 
 Every ruling and clause above is pinned: R1 → C24/C27/C28, R2 → C09,
 R3 → C05, R4 → C11, R5 → C30/C35, R6 → `Budgets.Validate` unit tests,
-R7 → F2 and C01–C03. The §5 bound → P1. The IMPLEMENTATION §8 Step-1 bullet
+R7 → F2 and C01–C03. The §5 bound → P1. The implementation.md §8 Step-1 bullet
 list is covered by C01–C35 ∪ {P3, P5}; CI fails if a bullet loses its named
 test. When `internal/convergence` is green under this matrix, Kubernetes may
-enter the picture (IMPLEMENTATION §8, Steps 2–5).
+enter the picture (implementation.md §8, Steps 2–5).
