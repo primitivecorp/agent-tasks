@@ -97,7 +97,7 @@ export function WhyItStops() {
 }
 
 const svgText = "fill-current font-mono text-[13px]";
-const svgNote = "fill-current font-sans text-[11px] opacity-70";
+const svgNote = "fill-muted-foreground font-sans text-[11px]";
 
 export function PipelineCompare() {
   return (

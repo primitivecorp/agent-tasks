@@ -27,7 +27,7 @@ export function Trust() {
       <h2 id="trust" className={h2}>
         Why letting go is reasonable
       </h2>
-      <p className="max-w-[70ch] text-[1.02rem] text-muted-foreground">
+      <p className="max-w-[70ch] text-[1.02rem]">
         Trust here isn’t a feeling about the model. It is four properties of the loop.
       </p>
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">

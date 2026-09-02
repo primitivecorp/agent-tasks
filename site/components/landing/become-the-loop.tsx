@@ -3,7 +3,7 @@ import { buttonVariants } from "@/components/ui/button";
 
 const h2 = "font-heading text-[1.55rem] font-bold leading-[1.15] tracking-tight";
 const svgText = "fill-current font-mono text-[13px]";
-const svgNote = "fill-current font-sans text-[11px] opacity-70";
+const svgNote = "fill-muted-foreground font-sans text-[11px]";
 
 // Ten steps, one boundary. x = 20 + i*116, width 100.
 const steps = [
@@ -93,7 +93,7 @@ export function BecomeTheLoop() {
             </g>
           </svg>
         </div>
-        <figcaption className="max-w-[74ch] text-[0.95rem] leading-[1.5] text-muted-foreground">
+        <figcaption className="max-w-[74ch] text-[0.95rem] leading-[1.5]">
           One task can run the whole lifecycle. Every box is a step; the ones that check produce a
           verdict about one exact version of the code, and any failing verdict sends the work back
           with the evidence. Human approval is a gate you place — before merge, before release,

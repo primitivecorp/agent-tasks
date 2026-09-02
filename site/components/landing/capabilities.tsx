@@ -111,11 +111,11 @@ export function Capabilities() {
       <h2 id="cap" className={h2}>
         Everything you used to do by hand is a step a task can run
       </h2>
-      <p className="max-w-[72ch] text-[1.02rem] text-muted-foreground">
+      <p className="max-w-[72ch] text-[1.02rem]">
         A task is a workflow. Every stage below is a step it can perform itself — and every step is
-        one of two kinds: it either <strong className="font-semibold text-foreground">does</strong>{" "}
+        one of two kinds: it either <strong className="font-semibold">does</strong>{" "}
         something to the code, or it{" "}
-        <strong className="font-semibold text-foreground">checks</strong> a version of it and returns
+        <strong className="font-semibold">checks</strong> a version of it and returns
         a verdict. This lifecycle is one example. Yours can add steps, drop steps, or put a person
         in the middle of one.
       </p>
@@ -140,7 +140,7 @@ export function Capabilities() {
       <p className="max-w-[72ch] text-[1.02rem] leading-[1.5]">
         <strong className="font-heading font-bold">Humans where you want them, not where you’re stuck
         with them.</strong>{" "}
-        <span className="text-muted-foreground">
+        <span>
           None of these steps waits on a person by default. A team places human gates where it wants
           them — an approval before merge, a sign-off before release, an intent check on staging —
           and removes them as the automated gates earn trust. That’s a dial, not a boundary.

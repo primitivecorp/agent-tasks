@@ -30,7 +30,7 @@ export function Hero() {
           To scale, you have to trust them. To trust them, you have to let them iterate on their
           own: edit the code, run the checks, and prove the result.
         </p>
-        <p className="text-muted-foreground">
+        <p>
           agent-tasks makes the whole lifecycle of a change — from filing the ticket to closing it —
           a workflow your cluster runs, verifies, and scales with compute instead of headcount.
         </p>
