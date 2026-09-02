@@ -1,0 +1,81 @@
+# golangci-lint v2 configuration.
+#
+# Starts from the kubebuilder v4 scaffold's linter set, minus ginkgolinter
+# (this repo uses the standard testing package), plus goheader for the
+# license header and depguard for the pure-core import budget. ENG-1771
+# merges the scaffold's file into this one.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - depguard
+    - dupl
+    - errcheck
+    - goconst
+    - gocyclo
+    - goheader
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    depguard:
+      rules:
+        # Section 11.1 rule 1 and section 11.8: the pure core imports the
+        # standard library and doublestar, nothing else, never k8s.io.
+        convergence:
+          list-mode: strict
+          files:
+            - "**/internal/convergence/**"
+          allow:
+            - $gostd
+            - github.com/bmatcuk/doublestar/v4
+    goheader:
+      # The same text as hack/boilerplate.go.txt without the comment markers.
+      # goheader compares comment content; controller-gen (ENG-1771) inserts
+      # the boilerplate file verbatim and needs the markers.
+      template: |-
+        Copyright 2026 Primitive Instruments Corporation
+
+        Licensed under the Apache License, Version 2.0 (the "License");
+        you may not use this file except in compliance with the License.
+        You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+    lll:
+      line-length: 120
+  exclusions:
+    generated: lax
+    rules:
+      # Table-driven tests repeat their shape and their fixture names on
+      # purpose.
+      - linters:
+          - dupl
+          - goconst
+        path: _test\.go
+
+formatters:
+  enable:
+    - goimports

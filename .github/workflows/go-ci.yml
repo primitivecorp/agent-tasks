@@ -1,0 +1,62 @@
+# Operator CI: one `make verify`.
+#
+# The Makefile is the single source of the checks and the linter version;
+# the Go version comes from go.mod via go-version-file. Change a check in
+# the Makefile, never here.
+#
+# `site/` (the project website) is outside the pull-request path filter. It
+# gets its own workflow when it lands.
+name: "Operator: CI"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".golangci.yml"
+      - "hack/**"
+      - ".github/workflows/go-ci.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: make verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # A toolchain mismatch fails loudly instead of downloading another Go.
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Read the golangci-lint pin
+        id: gcl
+        run: echo "version=$(make -s golangci-lint-version)" >> "$GITHUB_OUTPUT"
+
+      # The pinned prebuilt binary is fetched once per version and restored
+      # afterwards. On a hit the Makefile prerequisite is satisfied and the
+      # install recipe never runs. The key needs no Go version: the binary is
+      # a release build, independent of the project toolchain.
+      - uses: actions/cache@v6
+        with:
+          path: bin/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ runner.arch }}-${{ steps.gcl.outputs.version }}
+
+      - name: verify
+        run: make verify
