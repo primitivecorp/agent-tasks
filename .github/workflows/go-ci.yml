@@ -49,10 +49,11 @@ jobs:
         id: gcl
         run: echo "version=$(make -s golangci-lint-version)" >> "$GITHUB_OUTPUT"
 
-      # The pinned binary is built once per version and restored afterwards.
-      # On a hit the Makefile prerequisite is satisfied and the install
-      # recipe never runs.
-      - uses: actions/cache@v4
+      # The pinned prebuilt binary is fetched once per version and restored
+      # afterwards. On a hit the Makefile prerequisite is satisfied and the
+      # install recipe never runs. The key needs no Go version: the binary is
+      # a release build, independent of the project toolchain.
+      - uses: actions/cache@v6
         with:
           path: bin/golangci-lint
           key: golangci-lint-${{ runner.os }}-${{ runner.arch }}-${{ steps.gcl.outputs.version }}

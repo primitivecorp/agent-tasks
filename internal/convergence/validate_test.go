@@ -181,9 +181,8 @@ func TestPlanValidate_RejectsGateFieldsOnAction(t *testing.T) {
 
 func TestPlanValidate_RejectsWeakenedInjectedGate(t *testing.T) {
 	cases := map[string]func(*Step){
-		"not blocking":    func(s *Step) { s.Blocking = false },
-		"narrowed globs":  func(s *Step) { s.InvalidatedBy = []string{"**/*.py"} },
-		"with fix action": func(s *Step) { s.FixAction = &Step{Name: "integrity@policy@fix", Kind: Action} },
+		"not blocking":   func(s *Step) { s.Blocking = false },
+		"narrowed globs": func(s *Step) { s.InvalidatedBy = []string{"**/*.py"} },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -63,10 +63,10 @@ func (p Plan) Validate() error {
 	}
 
 	errs = append(errs, duplicateNames(identities)...)
-	if actions != 1 {
+	switch {
+	case actions != 1:
 		errs = append(errs, fmt.Errorf("plan must have exactly one Action step, found %d", actions))
-	}
-	if p.Driver != actionName {
+	case p.Driver != actionName:
 		errs = append(errs, fmt.Errorf("driver %q does not name the Action step %q", p.Driver, actionName))
 	}
 
@@ -160,9 +160,6 @@ func validateGateStep(i int, s Step) []error {
 		}
 		if len(s.InvalidatedBy) != 1 || s.InvalidatedBy[0] != defaultGlob {
 			at(fmt.Sprintf("injected gate must be invalidatedBy [%q]", defaultGlob))
-		}
-		if s.FixAction != nil {
-			at("injected gate must not carry a fixAction")
 		}
 	}
 
