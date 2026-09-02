@@ -84,6 +84,10 @@ func stepErr(i int, name, msg string) error {
 // validateName applies the one naming rule: the part before any "@" is a
 // DNS-1123 label, and the only suffix permitted is allowedSuffix. An empty
 // allowedSuffix permits no suffix, which is the rule for authored names.
+//
+// The reserved space is one level deep (section 3.3), so a name never carries
+// two suffixes. One consequence: an injected gate "<name>@policy" cannot own
+// a fix action, because its identity "<name>@policy@fix" fails this rule.
 func validateName(name, allowedSuffix string) error {
 	base, suffix, hasSuffix := strings.Cut(name, "@")
 	if hasSuffix {
@@ -181,11 +185,15 @@ func validateGateStep(i int, s Step) []error {
 }
 
 // fixActionDefects checks the synthesized shape of section 4 step 5: an
-// Action named "<gate>@fix" with no nested fix and no gate-only fields.
+// Action named "<gate>@fix" under the one naming rule, with no nested fix
+// and no gate-only fields.
 func fixActionDefects(gateName string, fix Step) []string {
 	var defects []string
 	if want := gateName + fixSuffix; fix.Name != want {
 		defects = append(defects, fmt.Sprintf("name is %q, want %q", fix.Name, want))
+	}
+	if err := validateName(fix.Name, fixSuffix); err != nil {
+		defects = append(defects, err.Error())
 	}
 	if fix.Kind != Action {
 		defects = append(defects, fmt.Sprintf("kind is %q, want Action", fix.Kind))

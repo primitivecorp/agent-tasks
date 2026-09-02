@@ -78,8 +78,10 @@ const (
 type Plan struct {
 	// Driver names the one authored Action step.
 	Driver string
-	// Steps are in topological order of `after`, ties by declaration order.
-	// Fix actions are not in this slice. They hang off their gates.
+	// Steps are in the order admission resolved them: topological order of
+	// the workflow's `after` edges, ties by declaration order. This package
+	// trusts that order and cannot check it, because Step carries no
+	// `after`. Fix actions are not in this slice. They hang off their gates.
 	Steps []Step
 }
 

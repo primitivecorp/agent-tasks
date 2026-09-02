@@ -154,6 +154,10 @@ func TestPlanValidate_RejectsFixActionNameOrKindMismatch(t *testing.T) {
 			}
 		},
 		"on the action": func(p *Plan) { step(p, "implement").FixAction = &Step{Name: "implement@fix", Kind: Action} },
+		// The reserved space is one level deep: "<name>@policy@fix" is not a name.
+		"on an injected gate": func(p *Plan) {
+			step(p, "integrity@policy").FixAction = &Step{Name: "integrity@policy@fix", Kind: Action}
+		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

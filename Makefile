@@ -12,7 +12,8 @@ GO ?= go
 LOCALBIN := $(CURDIR)/bin
 GOLANGCI_LINT_VERSION ?= v2.13.2
 GOLANGCI_LINT := $(LOCALBIN)/golangci-lint
-GOLANGCI_LINT_INSTALLER := https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh
+# The install script is pinned to the same tag as the binary it fetches.
+GOLANGCI_LINT_INSTALLER := https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh
 
 .PHONY: verify vet lint test manifests verify-manifests golangci-lint-version
 
