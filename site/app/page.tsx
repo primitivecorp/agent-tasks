@@ -1,22 +1,16 @@
-import { Stepper } from "@/components/convergence/stepper";
-import {
-  Glossary,
-  Masthead,
-  PipelineCompare,
-  Safety,
-  SiteFooter,
-  WhyItStops,
-} from "@/components/convergence/sections";
+import { BecomeTheLoop } from "@/components/landing/become-the-loop";
+import { Hero } from "@/components/landing/hero";
+import { Lifecycle } from "@/components/landing/lifecycle";
+import { Trust } from "@/components/landing/trust";
+import { SiteFooter } from "@/components/site-footer";
 
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-[1120px] px-7">
-      <Masthead />
-      <Stepper />
-      <WhyItStops />
-      <PipelineCompare />
-      <Safety />
-      <Glossary />
+      <Hero />
+      <Lifecycle />
+      <BecomeTheLoop />
+      <Trust />
       <SiteFooter />
     </main>
   );

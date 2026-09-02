@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, IBM_Plex_Mono, Source_Sans_3 } from "next/font/google";
+import { SiteNav } from "@/components/site-nav";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -25,7 +26,7 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "agent-tasks",
   description:
-    "Kubernetes-native task orchestration for autonomous coding agents: how one ticket converges to a verified change.",
+    "You can’t scale coding agents by managing them one at a time. agent-tasks runs the coding and verification loop for them on Kubernetes.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col font-sans">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <SiteNav />
           {children}
         </ThemeProvider>
       </body>
