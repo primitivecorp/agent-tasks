@@ -1,0 +1,106 @@
+---
+title: "Creating and reading tasks"
+description: "File a task, follow it with kubectl, read its view and evidence, and act on a failure."
+---
+
+## Create a task
+
+```yaml title="task.yaml"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentTask
+metadata:
+  name: fix-csv-export
+  namespace: agent-tasks-platform
+spec:
+  goal:
+    title: "CSV export drops the trailing row"
+    body: |
+      Reproduce with tests/fixtures/small.csv.
+    acceptanceCriteria:
+      - "New test covering the off-by-one"
+      - "Existing export tests still pass"
+  workflowRef:
+    name: python-minimal
+```
+
+The goal is what the agent receives, verbatim, on every run. `workflowRef` selects the
+workflow explicitly; nothing is inferred from the goal's text. Every spec field except
+`suspend` is frozen after creation: to change a goal, create a new task.
+
+## Follow it
+
+```bash
+kubectl get agenttasks -n agent-tasks-platform -w
+```
+
+```text
+NAME             WORKFLOW         PHASE     SNAPSHOT  DRIVER  TOKENS  AGE
+fix-csv-export   python-minimal   Running   h2        1/5     61204   48s
+```
+
+`SNAPSHOT` is the short current version of the code; `DRIVER` is agent runs used over the cap.
+
+```bash
+kubectl get agentsteps -n agent-tasks-platform
+```
+
+Each `AgentStep` is one execution, named from the task, the step and a hash of its inputs:
+`fix-csv-export-implement-3f9a1c2b7e`, `fix-csv-export-lint-...`, `fix-csv-export-lint-fix-...`.
+Its status holds the result, the produced snapshot and changed paths for actions, evidence and
+spend.
+
+## Read the view
+
+```bash
+kubectl get agenttask fix-csv-export -n agent-tasks-platform -o yaml
+```
+
+Under `status.view`:
+
+- `currentSnapshot` and `lineage`: which version the task is at and how it got there.
+- `gates.<name>`: `result` (`Unknown`, `Passed`, `Failed`, `Errored`), `verifiedSnapshot`, a
+  capped evidence excerpt and `evidenceRef`, `fixAttempts`, `infraRetries`.
+- `actions.<name>`: completions and the last snapshot produced, for the driver and every
+  synthesized fix action.
+- `driverRuns`, `spend.tokens`, `spend.activeRuntime`.
+
+A gate is green **only** if `result: Passed` and `verifiedSnapshot` equals `currentSnapshot`.
+Green at an older snapshot is `Unknown` for the current one and will run again.
+
+## Conditions and events
+
+`status.conditions` carries `Admitted`, `Provisioned`, `Suspended`, `Validated`, `Succeeded`
+and `Failed`, each with a reason. The operator emits events on gate transitions, fix attempts,
+driver runs, escalation and namespace lifecycle:
+
+```bash
+kubectl describe agenttask fix-csv-export -n agent-tasks-platform
+```
+
+## When a task fails
+
+| Reason         | What happened                                              | What to do                                                                                  |
+| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `oscillation`  | The agent returned to a version it had already produced.   | Read the gate evidence it kept failing on; the goal or a gate is probably underspecified.    |
+| `driver-runs`  | A blocking gate still failed when agent runs ran out.      | Look at the last evidence. Raise `maxDriverRuns` only if progress was real.                  |
+| `wall-clock`   | Active runtime exceeded the budget.                        | Check step durations in the `AgentStep` records; a slow gate may need its own timeout.       |
+| `token-budget` | Token spend exceeded the budget.                           | As above; consider a narrower goal.                                                         |
+| `infra`        | A step errored repeatedly for infrastructure reasons.      | The step's `exitReason` and events name the cause: image pull, timeout, executor contract.   |
+
+The work namespace is kept for `retainOnFailure` (24h by default) so the workspace can be
+inspected. Then create a new task; the failed one is the record.
+
+## Suspend
+
+```bash
+kubectl patch agenttask fix-csv-export -n agent-tasks-platform \
+  --type merge -p '{"spec":{"suspend":true}}'
+```
+
+The in-flight execution is cancelled, the workspace and view are kept, and the wall clock
+pauses. Clear the field to resume from the same gate state.
+
+## Delete
+
+Deleting a task cancels its execution and tears down its namespace, waiting for the namespace
+to actually terminate before the task object goes away.

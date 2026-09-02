@@ -1,0 +1,94 @@
+---
+title: "The convergence model"
+description: "Snapshots, Actions and Gates, the ledger of verdicts, and how a change to the code invalidates exactly the verdicts it should."
+---
+
+## Snapshots
+
+A **snapshot** is the content identity of the workspace: the git tree hash, with submodule and
+LFS pointers taken as tree content. Snapshots are immutable. Every execution starts from one,
+and an Action either produces a new one or leaves the current one unchanged.
+
+The task's own history of snapshots is its **lineage**: the base snapshot the task started
+from, then each snapshot an Action produced, with its parent and a sample of the paths that
+changed.
+
+## Actions and Gates
+
+Every step class is one of two kinds, and the split replaces a matrix of behavioural flags.
+
+- An **Action** mutates the workspace and produces a snapshot. The coding agent is an Action.
+  So is a formatter or an auto-fixer.
+- A **Gate** asserts something about a snapshot and returns a verdict: `Passed` or `Failed`,
+  with evidence. Lint, tests, a complexity limit, a resource-delta check, a review.
+
+Gates run against read-only mounts of the workspace and echo the snapshot they judged. An
+executor that reports a different snapshot for a gate is a contract violation, surfaced as an
+error, never adopted as a new version. "Gates never mutate" is enforced, not assumed.
+
+## The ledger
+
+The system's memory is a ledger of verdicts keyed by **what was judged**:
+
+```text
+(gate, gateKey) → Passed | Failed, evidence
+gateKey = hash(snapshot, the gate's resolved class spec)
+```
+
+The class spec is part of the key so that changing the verifier, its image or its command,
+invalidates its results. Absence is `Unknown`, and `Unknown` is what schedules a gate.
+
+## Invalidation
+
+When an Action produces a new snapshot, each gate's recorded verdict either carries forward or
+is cleared, decided by the gate's `invalidatedBy` globs against the paths the Action changed:
+
+- If **no changed path matches** the gate's globs, the verdict carries forward: it is
+  re-stamped as verified at the new snapshot without re-running.
+- Otherwise the verdict is cleared to `Unknown` and the gate runs again.
+
+Three rules make the default safe:
+
+1. **The default is `["**"]`.** A gate that declares no globs is cleared by any change. Stale
+   green is structurally harder than wasted re-verification.
+2. **A truncated change report clears everything.** If the executor could not report every
+   changed path, the whole tree is treated as changed.
+3. **Failed carries forward exactly like Passed.** A gate that failed at one snapshot, and whose
+   globs the next change misses, is still failed at the new snapshot. The agent has to touch
+   what the gate looks at.
+
+This is what makes concurrent work on one repository cheap: a change to documentation does not
+re-run the test suite, unless the team said it should.
+
+### Worked example
+
+A task starts at `h0`. The agent produces `h1`, changing `src/export.py` and a test. The
+`lint` gate, declared as `invalidatedBy: ["**/*.py"]`, runs and fails. Its fix action produces
+`h2`, changing only `src/export.py`: `lint` is cleared and runs again, and passes. The `unit`
+gate, with the default globs, was never judged for `h2` and runs now; it fails. The agent
+produces `h3`. Both gates are cleared: `lint` because a Python file changed, `unit` because
+anything changed. Both run and pass. The required `integrity@policy` gate, always invalidated
+by any change, runs last and passes. Every blocking gate is now `Passed` at `h3`, the current
+snapshot, and the task is validated.
+
+## The view
+
+The task does not carry its history around. Its status holds a **bounded view**: the current
+snapshot, the lineage, one entry per gate with its result and the snapshot it was verified at,
+one entry per action with its completion count, explicit counters, spend, and the name of the
+single execution in flight. Counters are stored, never recomputed from history, so a duplicate
+reconcile can never miscount.
+
+## Single flight
+
+One execution runs at a time per task. A mutation therefore never lands under an in-flight
+gate, and every result is folded against the snapshot it was produced from. Parallel gates are
+a later phase; the ledger's key grows an instance dimension before any step runs twice at once.
+
+## Fold and Decide
+
+Two pure functions drive everything. `Fold` takes the view and a completed execution's result
+and returns the new view, applying the invalidation rule above. `Decide` takes the pinned plan,
+the view and the budgets and returns exactly one of: run this Action, run this Gate, escalate
+with a reason, or done. The controller is a thin shell around them. See
+[Convergence and termination](/docs/concepts/convergence).

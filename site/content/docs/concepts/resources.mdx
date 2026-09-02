@@ -1,0 +1,63 @@
+---
+title: "The resources"
+description: "What each of the five kinds is for, who writes it, and what it may never do."
+---
+
+All kinds live in the group `agents.primitive.dev`, version `v1alpha1`. Structure, enums and
+immutability are validated by rules on the schemas; everything that spans objects is checked
+by the operator at admission, whose result is pinned immediately. There are no admission
+webhooks.
+
+## `AgentStepClass`
+
+Cluster-scoped. Declares an executable capability: `kind` (`Action` or `Gate`), `executor`,
+`image`, `command`, `args`, `timeout`. Gates add `blocking` (default `true`), an optional
+`fixAction` naming an Action class, and an `evidence` format. Actions add `turnBudget` and
+`tokenBudget`, enforced by the executor per invocation. Written by administrators only: a class
+is where behaviour lives, so whoever writes classes decides what can run in the cluster.
+See [authoring step classes](/docs/guides/step-classes).
+
+## `AgentClusterPolicy`
+
+Cluster-scoped, a singleton named `default`. Allowed classes, required gates, budget ceilings,
+and the work-namespace template. No policy, no tasks. See [the cluster policy](/docs/install/policy).
+
+## `AgentWorkflow`
+
+Namespaced, written by teams. Names the driver, the workspace (repository, base ref, optional
+sparse checkout), the budgets, and the steps: each a `name`, a `class`, an `after` list and,
+for gates, `invalidatedBy` globs. A step has **no behavioural fields at all**. A team cannot
+introduce an image, change what a step does, weaken a gate, or remove an injected one, because
+the schema has no place to write any of that. See [authoring workflows](/docs/guides/workflows).
+
+## `AgentTask`
+
+Namespaced. The durable, ticket-scoped intent: a `goal` (title, body, acceptance criteria) and
+a `workflowRef`. Every spec field is frozen after creation except `suspend`. Its status is
+written by the operator only and holds the resolved plan, the work namespace, the conditions,
+the view, and the active execution. See [creating and reading tasks](/docs/guides/tasks).
+
+## `AgentStep`
+
+Namespaced, created and owned by the task controller. A completely self-contained, immutable
+execution record: which step, which trigger, which input snapshot, which attempt, and the
+resolved image, command and timeout copied verbatim from the plan, so executing it reads no
+mutable object. Its name is deterministic from stored state and is the idempotency key, so a
+duplicate reconcile recomputes the same name and creation is safe to repeat. Terminal steps are
+reaped after a TTL once the task has folded them.
+
+## Phase 2: `AgentObservation`
+
+Namespaced, created by connectors, owned by a task. One fact from outside the sandbox: a
+deployment landed, the base branch advanced, a verdict from an external judge, a step performed
+by hand, a ticket change. The task controller folds them in order and marks them consumed.
+See [Connectors](/docs/connectors).
+
+## Who writes what
+
+| Role          | `AgentStepClass`, `AgentClusterPolicy` | `AgentWorkflow` | `AgentTask`        | `AgentStep` | Statuses    |
+| ------------- | -------------------------------------- | --------------- | ------------------ | ----------- | ----------- |
+| Cluster admin | write                                  |                 |                    |             |             |
+| Team          | read                                   | write           | write              | read        |             |
+| Operator      | read                                   | read            | read + finalizers  | write       | sole writer |
+| Connector     | read                                   | read            | create (Phase 2)   | read        |             |

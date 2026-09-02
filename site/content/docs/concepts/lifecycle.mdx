@@ -1,0 +1,80 @@
+---
+title: "Task lifecycle"
+description: "From admission to a terminal condition, what each condition means, and how the work namespace follows the task."
+---
+
+## Conditions
+
+Conditions are authoritative; the `phase` column is display only.
+
+| Condition     | Meaning                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Admitted`    | The plan is resolved and pinned. `False` with a reason on any resolution failure; the operator retries when the missing object appears, no manual poke needed.                        |
+| `Provisioned` | The work namespace exists with quota and network policies applied, and the view is initialised at the base snapshot. The wall clock starts here.                                     |
+| `Suspended`   | `spec.suspend` observed: the active execution is cancelled, the workspace and view are retained, scheduling is held, and the wall clock pauses.                                        |
+| `Validated`   | Convergence reached: the agent has run at least once and every blocking gate is `Passed` at the current snapshot.                                                                    |
+| `Succeeded`   | Terminal. Cleanup after `Validated` is complete: the work namespace has been observed gone.                                                                                           |
+| `Failed`      | Terminal, with the termination reason. The work namespace is retained for post-mortem.                                                                                               |
+| `Canceled`    | Terminal, Phase 2: the source ticket was closed. The active execution is cancelled and the namespace released.                                                                       |
+
+## Admission
+
+Admission happens once per task, before any execution, and its result is pinned:
+
+1. Fetch the `AgentClusterPolicy` named `default`. Absent means `Admitted=False, reason=NoPolicy`.
+2. Fetch the workflow from `spec.workflowRef`. Absent means `reason=NoWorkflow`.
+3. Resolve every class the workflow, its fix actions and the policy's required gates reference.
+   Check that classes exist and are allowed, that gate steps use Gate classes and fix actions
+   name Action classes, that exactly one step is an Action and the driver names it, that
+   `invalidatedBy` appears only on gates, and that `after` forms a DAG.
+4. Default every gate without `invalidatedBy` to `["**"]`.
+5. Synthesize a fix action, `<gate>@fix`, for every gate whose class names one.
+6. Inject the policy's required gates as `<name>@policy`, after every workflow step, blocking,
+   invalidated by any change. Always, even if the workflow authored the same class.
+7. Check budgets against ceilings. Reject, never clamp.
+8. Write `status.resolvedPlan` with a content hash of the workflow, the policy and every class,
+   and set `Admitted`. A transition rule freezes the plan from this write forward.
+
+From here on, edits to the workflow, the policy or any class have **no effect** on this task.
+
+## Execution
+
+The operator holds one execution in flight per task. Each reconcile does one thing: fold a
+finished step's result into the view, or ask `Decide` for the next step and create it. The
+`AgentStep` controller drives the executor with an idempotent `Ensure` call keyed on the step
+name, polls until the execution is terminal, and writes the result. A crash between folding
+and persisting simply re-folds the same terminal result; a crash after it leaves a folded step
+for the reaper.
+
+## Completion
+
+`Validated` is not the end. The operator requests deletion of the work namespace and waits
+until it is actually gone before setting `Succeeded`, because namespace deletion is
+asynchronous and can hang on stuck resources. `Succeeded` means cleanup is done.
+
+## Failure
+
+`Failed` carries one of five reasons: `oscillation`, `driver-runs`, `wall-clock`,
+`token-budget`, `infra`. The work namespace is stamped with a delete-after time from the
+policy's `retainOnFailure` and reaped by the operator on a timer. Until then it is available
+for a post-mortem.
+
+## Suspend and resume
+
+Setting `spec.suspend: true` cancels the in-flight execution and holds scheduling. The
+namespace, the workspace and the view survive. Clearing it resumes from the exact gate state,
+and the wall-clock budget, which measures **active** runtime, did not advance in between.
+
+## Deletion
+
+Deleting a task takes the finalizer path: cancel the active execution, delete the work
+namespace, wait for it to terminate, then remove the finalizer. A namespaced object cannot own
+a cluster-scoped `Namespace`, so none of this is left to garbage collection.
+
+## The work namespace
+
+One namespace per task, named `at-<first 12 characters of the task UID>`, recorded in
+`status.workNamespace`. It is the isolation and networking boundary for everything derived
+from the agent's workspace and the foundation for per-pod networking when real executors run
+pods in it. Created at provisioning with the policy's quota, limit range and network policies;
+released on success; retained on failure; torn down explicitly on deletion.

@@ -1,0 +1,57 @@
+---
+title: "Operating the system"
+description: "Day-two concerns for platform teams: changing classes and policy, budgets, retention, observability and troubleshooting."
+---
+
+## Changing classes, policy and workflows
+
+Running tasks are unaffected by any edit: the resolved plan pins the content of the workflow,
+the policy and every class at admission. New tasks pick up the change. This is by design, and
+it has a cost worth knowing: a pinned task keeps running a gate image an administrator has
+since patched. To apply a change to work in flight, cancel and recreate those tasks.
+Loosening pinning is never the fix.
+
+## Budgets and ceilings
+
+Ceilings in the policy bound every workflow's budgets; a workflow over a ceiling fails
+admission and says so. Set ceilings from what a runaway task should be allowed to cost, and let
+teams pick budgets below them per workflow. Zero is invalid, not infinite: every budget must be
+positive.
+
+## Namespaces
+
+Each task's namespace carries the policy's quota and limit range, so a cluster's total exposure
+is roughly concurrent tasks times the quota. Successful tasks release theirs; failed tasks keep
+theirs for `retainOnFailure`, after which the operator reaps them on a timer. Deleting a task
+tears its namespace down and waits for termination.
+
+If a namespace sticks in `Terminating`, a resource with a finalizer inside it is the usual
+cause; the task's finalizer waits rather than pretending the teardown finished.
+
+## Step records
+
+Terminal `AgentStep` objects are kept for `ttlSecondsAfterFinished` (3600 by default) and
+reaped only after the task has folded them. They are the execution record: inputs, resolved
+command, result, evidence, spend. A durable evidence store and a read API follow in a later
+phase; until then, export what you need before the TTL.
+
+## Observability
+
+- **Events** on gate transitions, fix attempts, driver runs, escalation and namespace
+  lifecycle, visible with `kubectl describe`.
+- **Structured logs** from the operator with the task name, step name and current snapshot on
+  every line.
+- **Conditions** with a reason on every transition, and `observedGeneration` on every status.
+
+## Troubleshooting
+
+| Symptom                                         | Cause and fix                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Admitted=False, reason=NoPolicy`               | No `AgentClusterPolicy` named `default`. Create it; admission retries automatically.                                                        |
+| `Admitted=False, reason=NoWorkflow`             | `workflowRef` names a workflow that does not exist in the namespace.                                                                       |
+| `Admitted=False, reason=BudgetCeiling`          | A workflow budget exceeds a policy ceiling. Lower the budget or raise the ceiling.                                                          |
+| `Admitted=False`, a class is missing or not allowed | Create the class or add it to `allowedClasses`. The task admits the moment the object appears.                                         |
+| `Admitted=False`, a second Action, or a cycle in `after` | The workflow is invalid for the first release. Fix the workflow and recreate the task.                                            |
+| A gate `Errored` with `exitReason: GateMutation` | The executor reported a different snapshot for a gate run. Gates must not write to the workspace; fix the class's command or image.       |
+| A task stuck on `Provisioned=False`             | Namespace creation, quota or a network policy from the library failed. An unknown network policy name fails admission with a reason.        |
+| A failed task's namespace is still there        | It is retained for `retainOnFailure`. Delete the task to tear it down sooner.                                                               |

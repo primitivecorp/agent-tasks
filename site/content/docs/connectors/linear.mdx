@@ -1,0 +1,85 @@
+---
+title: "Linear"
+description: "Turn Linear issues into tasks, keep the issue updated as the task runs, and close it when the change ships."
+---
+
+<Callout title="Phase 2" type="info">
+  The Linear connector is a reference connector on the pattern described in
+  [Connectors](/docs/connectors). Configuration shapes on this page are indicative until it
+  ships.
+</Callout>
+
+## What it does
+
+- **Issue to task.** An issue that matches the connector's selection becomes an `AgentTask` in
+  the mapped namespace, with the issue's title, description and a structured acceptance
+  section as the goal.
+- **Status back to Linear.** The task's conditions and gate view render as an agent plan on the
+  issue: which version is current, which checks passed, what failed and why, what it cost. The
+  issue moves to the configured states as the task is provisioned, validated and completed.
+- **Close.** When the workflow's `close-ticket` step runs, the connector marks the issue done
+  with a summary of what shipped and what was verified. If a person closes the issue first, the
+  connector reports a `TicketChange` and the task ends as `Canceled`.
+
+## Selection is structured, never text
+
+Which workflow runs is resolved from **trusted structured fields**: the team, the project, and
+labels. Never from the issue's description or comments, which anyone with issue access can
+write, the agent included. A typical mapping:
+
+```yaml title="linear-connection.yaml (indicative)"
+apiVersion: connectors.agents.primitive.dev/v1alpha1
+kind: TrackerConnection
+metadata:
+  name: linear-platform
+  namespace: agent-tasks-platform
+spec:
+  provider: linear
+  credentialRef: { name: linear-api-key }        # a Secret in this namespace
+  webhook:
+    secretRef: { name: linear-webhook-secret }  # signature verification
+  sweepInterval: 5m
+  selection:
+    team: PLAT
+    label: agent
+    workflowByLabel:
+      "agent:python": python-minimal
+      "agent:docs": docs-only
+    default: python-minimal
+  states:
+    provisioned: In Progress
+    validated: In Review
+    succeeded: Done
+    failed: Blocked
+```
+
+An issue in team `PLAT` with the `agent` label becomes a task; an `agent:python` label picks
+the `python-minimal` workflow. The description becomes `goal.body`; a checklist under an
+"Acceptance" heading becomes `goal.acceptanceCriteria`.
+
+## What the connector needs
+
+- A Linear API key or OAuth app with read on issues and write on issues and comments, stored in
+  a `Secret` in the connector's namespace.
+- A webhook subscription for issue events, with signature verification.
+- RBAC to create `AgentTask` and `AgentObservation` in the mapped namespaces, and to read task
+  status.
+- Its name in the policy's `allowedObservationSources`.
+
+## Operations
+
+- **Sweep.** Every `sweepInterval` the connector lists matching issues and reconciles: a
+  missed creation becomes a task, a closed issue cancels its task, a task whose status changed
+  while Linear was unreachable is re-rendered. Webhooks make it fast; the sweep makes it
+  correct.
+- **Abandoned work.** An issue that loses the label or is closed mid-run ends its task and
+  releases the work namespace, so abandoned tickets never hold capacity.
+- **Rate caps.** The policy caps tasks per source per window and the depth at which tasks may
+  create tasks, so a runaway integration cannot flood the cluster.
+
+## Security notes
+
+- The agent never holds the Linear credential. It writes to the issue only through the
+  connector's actuator, which validates what it posts.
+- A materially different issue is a new task. Editing the description of an issue whose task is
+  running does not change the running task's goal, which is pinned at admission.

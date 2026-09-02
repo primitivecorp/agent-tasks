@@ -1,0 +1,92 @@
+---
+title: "The cluster policy"
+description: "The one object every cluster needs before a task can run, and what each field constrains."
+---
+
+`AgentClusterPolicy` is cluster-scoped and written by platform administrators. In the first
+release it is a **singleton named `default`**, enforced by a validation rule on the name.
+Namespace selectors and per-tenant policies arrive with multi-tenancy; the shape below is
+forward-compatible with them.
+
+```yaml title="policy.yaml"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentClusterPolicy
+metadata:
+  name: default
+spec:
+  allowedClasses: ["*"]
+  requiredGates:
+    - name: integrity
+      class: integrity-check
+  ceilings:
+    tokens: 8000000
+    wallClock: 4h
+    maxDriverRuns: 8
+    fixAttemptsPerGate: 5
+    infraRetries: 3
+  workNamespace:
+    networkPolicies: [default-deny-ingress, default-deny-egress, allow-dns]
+    runtimeClasses: [kata-qemu]
+    retainOnFailure: 24h
+```
+
+```bash
+kubectl apply -f policy.yaml
+```
+
+## Fields
+
+### `allowedClasses`
+
+The `AgentStepClass` names a workflow may reference. `["*"]` allows every class. A workflow
+that references a class outside this list is not admitted.
+
+### `requiredGates`
+
+Gates injected into **every** resolved plan at admission. Each entry names a concrete Gate
+class. The injected step gets a reserved identity, `<name>@policy`, that no authored step can
+occupy, runs after every workflow step, is always blocking, and is invalidated by any change to
+the code.
+
+Injection is never suppressed by a workflow that happens to author the same class: the authored
+copy's ordering and invalidation rules are team-controlled, so honouring it would let a
+workflow shadow a required gate with a weakened one. The team may delete its own copy; the
+duplicate run is the cheap outcome.
+
+### `ceilings`
+
+Upper bounds for every workflow's budgets. A workflow asking for more is **rejected at
+admission**, never clamped.
+
+| Field                | Meaning                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| `tokens`             | Total tokens a task may spend across all agent runs.                                                      |
+| `wallClock`          | Active runtime. Accrues from provisioning and pauses while a task is suspended.                            |
+| `maxDriverRuns`      | Total invocations of the agent, the first one included. Default 5 at the workflow level.                  |
+| `fixAttemptsPerGate` | How many times a gate's fix action may run before the gate falls through to the agent. Default 3.         |
+| `infraRetries`       | Consecutive infrastructure failures of one step before the task escalates. Reset by a success. Default 2. |
+
+### `workNamespace`
+
+The template for the namespace each task gets.
+
+| Field             | Meaning                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `networkPolicies` | Names from the operator's built-in library: `default-deny-ingress`, `default-deny-egress`, `allow-dns`. An unknown name fails task admission.           |
+| `runtimeClasses`  | The isolation tiers pods in the namespace may use. Enforced when real executors run pods.                                                              |
+| `resourceQuota`   | A `ResourceQuotaSpec` applied to every work namespace.                                                                                                 |
+| `limitRange`      | A `LimitRangeSpec` applied to every work namespace.                                                                                                    |
+| `retainOnFailure` | How long a failed task's namespace is kept for post-mortem before the operator reaps it. Default 24h.                                                  |
+
+## Changing the policy later
+
+A running task keeps the policy it was admitted with: the resolved plan pins the policy's
+content, so tightening a ceiling or adding a required gate affects tasks admitted from then on.
+To apply a new gate to work already in flight, cancel and recreate those tasks.
+
+## Phase 2 fields
+
+The Phase 2 design adds `allowedObservationSources`, the connectors whose
+[observations](/docs/connectors) a namespace accepts, and `approvalGates`, which injects an
+approval gate before every step of an Action class an administrator names. See
+[merge, deploy and release](/docs/connectors/merge-deploy-release).

@@ -1,0 +1,85 @@
+---
+title: "GitHub"
+description: "Create tasks from GitHub Issues, and let tasks open, update and merge pull requests with reviews as gates."
+---
+
+<Callout title="Phase 2" type="info">
+  The GitHub connector is a reference connector on the pattern described in
+  [Connectors](/docs/connectors). Configuration shapes on this page are indicative until it
+  ships.
+</Callout>
+
+## Two roles in one connector
+
+- **Issues as a tracker.** An issue that matches the selection becomes an `AgentTask`, exactly
+  as with [Linear](/docs/connectors/linear): selection from labels and repository, never from
+  the issue body; status rendered back as a task list comment; the issue closed when the
+  workflow's close step runs, or the task cancelled when a person closes the issue.
+- **Pull requests as the source-control connector.** Actions push the task's snapshot to a
+  branch and open, update and merge pull requests; reviews and approvals arrive as verdicts;
+  base branch movement arrives as an observation.
+
+## Pull request steps in a workflow
+
+```yaml title="Steps after the sandbox gates"
+    - name: pull-request
+      class: github-open-pr        # Action, executor Http
+      after: [unit]
+    - name: review
+      class: github-pr-review      # Gate, executor Observed, source github
+      after: [pull-request]
+      maxWait: 48h
+    - name: integrated
+      class: integrated            # Gate, scope Diff; fix action rebases
+      after: [review]
+    - name: merge
+      class: github-merge          # Action, executor Http, fast-forward
+      after: [integrated]
+```
+
+- `github-open-pr` pushes the current snapshot through the git broker, which holds the deploy
+  key, and opens a pull request or updates the existing one. It returns the pull request as
+  its reference. After the agent produces a new version, the step runs again and the pull
+  request is updated; if the previous one was merged, a new one is opened.
+- `github-pr-review` is an observed gate. An approving review is a `Passed` verdict for the
+  reviewed commit's snapshot. Changes requested is `Failed`, with the review comments as
+  evidence, which sends the agent back with exactly what the reviewer asked for. A review of an
+  older version is inert: it cannot pass a newer one.
+- `integrated` asserts the snapshot already contains the base branch. When `main` moves, the
+  connector reports `BaseAdvanced`, the gate is cleared, and its fix action rebases through
+  the broker, producing the integrated tree as a new snapshot. Only gates whose globs intersect
+  the incoming changes run again.
+- `github-merge` fast-forwards `main` to the pull request head. If the base moved in between,
+  the merge reports `Preempted`, which is neither a completion nor an error; the `BaseAdvanced`
+  observation that beat it has already cleared the `integrated` gate.
+
+## Merging by hand
+
+If a person merges the pull request, the connector reports a `Completion` for the `merge` step
+at the merged snapshot, and the workflow proceeds as if the step had run.
+
+## What the connector needs
+
+A GitHub App installed on the repositories, with:
+
+| Permission        | Access | Used for                                                      |
+| ----------------- | ------ | ------------------------------------------------------------- |
+| Issues            | write  | tracker role: read issues, post the status comment, close     |
+| Pull requests     | write  | open, update, merge; read reviews                             |
+| Contents          | write  | push task branches through the git broker; fast-forward merge |
+| Checks            | read   | optional: external CI as an observed gate                     |
+| Metadata          | read   | repository discovery                                          |
+
+Webhook events: `issues`, `pull_request`, `pull_request_review`, `push`. Plus a reconciling
+sweep on an interval, because webhooks are lossy.
+
+Branch protection should make the connector the only merger, so the lane or queue the team
+uses is not bypassed.
+
+## Security notes
+
+- Credentials live in the connector and the git broker. The sandbox pulls through the broker
+  and never sees a token.
+- Workflow selection for issues reads labels and the repository, never the issue body.
+- Review evidence reaches the agent as text to act on, not as instructions the operator
+  follows.

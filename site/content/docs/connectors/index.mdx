@@ -1,0 +1,93 @@
+---
+title: "Connectors"
+description: "How tasks come from your tracker and how a task reaches past the sandbox, through components that hold the credentials the agent never sees."
+---
+
+<Callout title="Phase 2" type="info">
+  Connectors are designed in the specification's section 12 and land after the first release.
+  The contract below is what a connector implements; the Linear and GitHub pages describe the
+  reference connectors built on it.
+</Callout>
+
+## The pattern
+
+A connector is a component deployed **outside the operator**, by cluster administrators, with
+its own scoped credential. It has two duties and no authority.
+
+- **Sensor.** It translates external events into observations: a ticket was created or closed,
+  a review arrived, a pull request was merged by hand, a deployment landed, the base branch
+  moved. It never writes task status. It creates `AgentObservation` objects, owned by the task,
+  which the operator folds in order and marks consumed.
+- **Actuator.** It performs Actions whose class executor is `Http`: open or update a pull
+  request, enqueue or merge, cut a release, flip a flag, file or comment on or close a ticket.
+  The operator calls the connector with the step's spec and the execution ID as an idempotency
+  key; the connector does the work with its credential and reports the result.
+
+Connectors never decide what runs next. The operator does, from the task's view. And the
+operator never calls a tracker, git, a CD system or anything else outside the API server: it
+wakes on connector writes exactly as it wakes on step results.
+
+## Observations
+
+```yaml title="An observation, created by a connector"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentObservation
+metadata:
+  generateName: fix-csv-export-
+  namespace: agent-tasks-platform
+  ownerReferences: [{ kind: AgentTask, name: fix-csv-export, ... }]
+spec:
+  taskRef: { name: fix-csv-export }
+  observation:
+    kind: Verdict            # Deployment | BaseAdvanced | Verdict | Completion | TicketChange
+    source: github-pr        # must be in the policy's allowedObservationSources
+    sequence: 41             # per task and source, strictly increasing
+    snapshot: 9c1e...        # the task snapshot this fact is about
+    gate: review
+    result: Failed
+    ref: "PR #128 review by @maria"
+    evidence: "Please handle the empty-file case in export()."
+```
+
+| Kind           | Fact                                                                | Effect on the task                                                                                           |
+| -------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `Deployment`   | An environment now contains, or no longer contains, the snapshot.   | Environment gates on it are cleared and become runnable, or wait.                                            |
+| `BaseAdvanced` | The workspace's base ref moved.                                      | Diff-scoped gates are cleared, so an `integrated` gate re-runs and its fix rebases.                           |
+| `Verdict`      | An observed gate's result arrived, for a named snapshot.            | The gate takes the verdict if the snapshot is current. A stale verdict is recorded and otherwise inert.       |
+| `Completion`   | A step's work was done outside the task, such as a merge by hand.   | The Action is marked complete at the current snapshot and the workflow proceeds.                             |
+| `TicketChange` | The source ticket changed.                                          | `closed` ends the task as `Canceled`. Other edits change nothing: the goal is pinned.                        |
+
+## What a connector must do
+
+- **Sequence.** Number observations per task and source, strictly increasing. The operator
+  rejects replays; gaps are fine, so a reconciling sweep can re-report safely.
+- **Resolve.** Name the task's snapshot, a tree hash, never a commit. The connector that knows
+  the commit resolves it: a review names a head commit whose tree is the snapshot; a deployment
+  names a commit that does or does not contain the task's merge commit.
+- **Sweep.** Webhooks are lossy. Every sensor also reconciles from the source of truth on an
+  interval. A missed webhook costs latency, never correctness.
+- **Deduplicate.** Actuator calls are idempotent by execution ID. A reconcile storm cannot
+  merge twice or file a ticket twice.
+- **Hold its own credential.** In a `Secret` in the connector's namespace. The agent's sandbox
+  has no API access and never sees it.
+
+## Trust boundary
+
+- `AgentClusterPolicy.allowedObservationSources` lists the connectors whose observations a
+  namespace accepts.
+- RBAC to create `AgentObservation` is granted to connector service accounts only.
+- Observations are validated against the plan: a verdict must name an observed gate, a
+  completion must name an Action whose class allows it, a deployment must name an environment
+  the plan uses.
+- An observation can only change the task's view, never its plan.
+
+Connectors are administrator-owned like classes: a compromised connector is a cluster
+incident, not a tenant escalation.
+
+## Reference connectors
+
+| Connector                                            | Senses                                                            | Actuates                                        |
+| ---------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| [Linear](/docs/connectors/linear)                    | issues created, edited, closed                                    | create issues, add detail, update state, close  |
+| [GitHub](/docs/connectors/github)                    | issues; pull request reviews, approvals, merges; base advanced    | open or update pull requests, merge             |
+| [Merge, deploy, release](/docs/connectors/merge-deploy-release) | turns, landings, deployments, canary results, flag metrics | enqueue, release, roll back, flip flags     |

@@ -1,0 +1,131 @@
+---
+title: "Authoring workflows"
+description: "Compose step classes into the loop your team wants, as a team."
+---
+
+An `AgentWorkflow` is composition only. It names the driver, the workspace, the budgets and the
+steps. It cannot introduce an image, change a class's behaviour, or remove the gates the
+cluster policy injects.
+
+## A minimal workflow
+
+```yaml title="python-minimal.yaml"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentWorkflow
+metadata:
+  name: python-minimal
+  namespace: agent-tasks-platform
+spec:
+  driver: implement
+  workspace:
+    repo: git@github.com:primitivecorp/example
+    baseRef: main
+  budgets:
+    tokens: 400000
+    wallClock: 20m
+    maxDriverRuns: 5
+  steps:
+    - name: implement
+      class: coding-agent
+    - name: lint
+      class: lint-python
+      after: [implement]
+      invalidatedBy: ["**/*.py"]
+    - name: unit
+      class: test-pytest
+      after: [lint]
+```
+
+## Steps
+
+| Field           | Meaning                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`          | Unique within the workflow; a DNS-1123 label. It is the key in the task's view.                                                              |
+| `class`         | An `AgentStepClass` name.                                                                                                                    |
+| `after`         | Step names this step follows. Must form a DAG.                                                                                               |
+| `invalidatedBy` | Gates only. Path globs; a change matching any of them clears the gate's verdict. **Default `["**"]`**: any change re-runs the gate.           |
+
+### Ordering is cost
+
+`after` is the order the operator walks. Put cheap gates first: a failing lint run
+short-circuits before the test suite starts, and the agent gets the cheapest evidence first.
+
+### Invalidation globs
+
+Globs follow the `doublestar` dialect: they match the whole repository-relative path, `/`
+separated, case-sensitive; `**` spans directories and `*` does not. A pattern that does not
+compile fails admission.
+
+Narrow globs make the loop cheap; the default keeps it safe. A gate that judges Python code can
+say `["**/*.py"]`. A test suite should usually keep the default until the team knows what it
+depends on.
+
+### Exactly one Action
+
+In the first release a workflow has exactly one authored Action, named by `driver`. Fix actions
+are never authored: a gate's class names them. Workflows with several Actions, for pull request,
+merge, release and close steps, arrive with the Phase 2 runnability rule; see
+[beyond the sandbox](/docs/guides/beyond-the-sandbox).
+
+## Budgets
+
+Every budget must be at or below the policy's ceiling, or the task is rejected at admission
+with `reason=BudgetCeiling`. Defaults apply where a workflow is silent: `maxDriverRuns` 5,
+`fixAttemptsPerGate` 3, `infraRetries` 2.
+
+## What the policy adds
+
+Every required gate in the cluster policy is injected into the resolved plan as
+`<name>@policy`, after all of your steps, blocking, invalidated by any change. You do not see
+it in your workflow and cannot remove it. If you author the same class yourself, both copies
+run.
+
+## A fuller loop
+
+The same shape with more of what a team usually checks. Class names are from a reference
+library; yours will differ.
+
+```yaml title="python-full.yaml"
+spec:
+  driver: implement
+  steps:
+    - name: implement
+      class: coding-agent
+    - name: format
+      class: format-check          # fixAction: format-fix
+      after: [implement]
+    - name: lint
+      class: lint-python           # fixAction: lint-python-fix
+      after: [format]
+      invalidatedBy: ["**/*.py"]
+    - name: complexity
+      class: complexity-limit
+      after: [lint]
+      invalidatedBy: ["**/*.py"]
+    - name: unit
+      class: test-pytest
+      after: [complexity]
+    - name: integration
+      class: test-integration-logs # asserts behaviour and clean logs
+      after: [unit]
+    - name: perf
+      class: resource-deltas       # CPU and memory against the base snapshot
+      after: [integration]
+      invalidatedBy: ["src/**"]
+    - name: docs
+      class: docs-required
+      after: [unit]
+      invalidatedBy: ["src/**", "docs/**"]
+```
+
+## Rules checked at admission
+
+- Step names unique and DNS-1123; `driver` names the one Action step.
+- Every class exists, is allowed by policy, and matches its step's kind.
+- `invalidatedBy` only on gates; `after` references exist and form no cycle.
+- Budgets at or below ceilings.
+
+## Changing a workflow
+
+`spec` is immutable after creation: edit by replacing the object. Running tasks are pinned to
+the workflow content they admitted with either way.

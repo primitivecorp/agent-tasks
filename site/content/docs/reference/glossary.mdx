@@ -1,0 +1,78 @@
+---
+title: "Glossary"
+description: "The terms this documentation uses, each in a sentence."
+---
+
+**Action.** A step kind that mutates the workspace and produces a snapshot: the agent, a
+formatter, a fixer.
+
+**Admission.** The one-time resolution of a task's workflow, policy and classes into a pinned
+plan, with every cross-object check, before any execution.
+
+**Blocking gate.** A gate whose failure must be remediated before the task can complete.
+Non-blocking gates are recorded and do not block.
+
+**Connector.** A component outside the operator that senses facts from an external system as
+observations and performs actions that need credentials. Phase 2.
+
+**Convergence.** The state in which the agent has run and every blocking gate is passed at the
+current snapshot. `Decide` returns done.
+
+**Decide.** The pure function that, from the plan, the view and the budgets, returns the single
+next thing to run, an escalation, or done.
+
+**Driver.** The one authored Action in a workflow: the coding agent.
+
+**Environment gate.** Phase 2. A gate whose verdict is about the deployment that contains the
+snapshot, runnable only once that deployment is observed.
+
+**Escalation.** Ending a task as failed with one of the termination reasons.
+
+**Evidence.** What a gate returns with its verdict: tool output copied out by the executor,
+never a file from the agent-writable workspace.
+
+**Executor.** The component that runs an `AgentStep`: the fake executor in the first release;
+sandbox, job, connector and observed executors later.
+
+**Fix action.** A synthesized Action, `<gate>@fix`, from the Action class a gate names; runs
+before an agent turn is spent on the gate's failure.
+
+**Fold.** The pure function that applies a completed execution's result to the view, including
+invalidation.
+
+**Gate.** A step kind that asserts something about a snapshot and returns a verdict with
+evidence.
+
+**Gate key.** The hash of a snapshot and a gate's resolved class spec; the key under which a
+verdict is recorded.
+
+**Injected gate.** A gate the cluster policy requires, added to every plan at admission as
+`<name>@policy`; unremovable by the team.
+
+**Invalidation.** Clearing a gate's verdict when an Action changes a path matching the gate's
+globs. Default: any change.
+
+**Ledger.** The map from gate key to verdict that is the system's memory of what was verified.
+
+**Lineage.** The sequence of snapshots a task has occupied, from the base snapshot on.
+
+**Observation.** Phase 2. A fact from outside the sandbox, written by a connector, folded into
+the view like a step result.
+
+**Oscillation.** An Action producing a snapshot the task already occupied, other than the
+current one; a termination reason.
+
+**Plan.** The resolved, immutable interpretation of a workflow under a policy: every step by
+content, injected gates, fix actions, budgets.
+
+**Single flight.** One execution in flight per task.
+
+**Snapshot.** The content identity of the workspace: the git tree hash.
+
+**Verified snapshot.** The snapshot a gate's recorded verdict is valid for. Green counts only
+when it equals the current snapshot.
+
+**View.** The bounded, authoritative state of a task's loop, kept in its status.
+
+**Work namespace.** The namespace created for each task, carrying the policy's quota and
+network policies; the isolation boundary for the agent's workspace.
