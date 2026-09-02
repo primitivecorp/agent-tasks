@@ -5,143 +5,122 @@ const h2 = "font-heading text-[1.55rem] font-bold leading-[1.15] tracking-tight"
 const svgText = "fill-current font-mono text-[13px]";
 const svgNote = "fill-current font-sans text-[11px] opacity-70";
 
+// Ten steps, one boundary. x = 20 + i*116, width 100.
+const steps = [
+  { t: "ticket", n: "from any source" },
+  { t: "reproduce", n: "evidence" },
+  { t: "implement", n: "in a sandbox" },
+  { t: "check", n: "gates" },
+  { t: "pull request", n: "managed" },
+  { t: "merge", n: "by policy" },
+  { t: "staging", n: "verify" },
+  { t: "release", n: "by policy" },
+  { t: "production", n: "verify live" },
+  { t: "close", n: "report" },
+];
+const X = (i: number) => 20 + i * 116;
+const CX = (i: number) => X(i) + 50;
+
 export function BecomeTheLoop() {
   return (
-    <section aria-labelledby="become" className="mb-14 grid gap-5">
-      <h2 id="become" className={h2}>
-        We become the coding and verification loop
+    <section aria-labelledby="loop" className="mb-14 grid gap-5">
+      <h2 id="loop" className={h2}>
+        One task, the whole lifecycle
       </h2>
       <figure className="m-0 grid gap-3">
-        <svg
-          viewBox="0 0 1092 252"
-          role="img"
-          aria-label="A ticket, prepared by humans, enters the agent-tasks loop where an agent edits, gates check, and failures return to the agent; the loop produces a pull request; humans verify on staging and release; agent-tasks verifies in production; a failure on staging or in production re-opens the loop"
-          className="block h-auto w-full text-foreground"
-        >
-          <defs>
-            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-              <path d="M0 0L10 5L0 10z" fill="currentColor" />
-            </marker>
-            <marker id="arr-signal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-              <path d="M0 0L10 5L0 10z" className="fill-signal" />
-            </marker>
-          </defs>
-          {/* human end: ticket */}
-          <g fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="14" y="70" width="128" height="52" rx="6" />
-          </g>
-          <g textAnchor="middle" className={svgText}>
-            <text x="78" y="92">ticket</text>
-          </g>
-          <g textAnchor="middle" className={svgNote}>
-            <text x="78" y="110">filed · detailed · triaged</text>
-            <text x="78" y="142">humans</text>
-          </g>
-          {/* the loop */}
-          <g>
-            <rect x="188" y="30" width="300" height="140" rx="10" className="fill-signal-soft stroke-signal" strokeWidth="2" />
-            <text x="338" y="52" textAnchor="middle" className="fill-signal font-mono text-[11px] tracking-[0.08em]">
-              AGENT-TASKS
+        <div className="overflow-x-auto">
+          <svg
+            viewBox="0 0 1180 262"
+            role="img"
+            aria-label="Ten steps inside one agent-tasks boundary: ticket, reproduce, implement, check, pull request, merge, staging, release, production, close. A failing check returns to implement; failures on staging or in production return to implement too. Optional human gates sit before merge and release."
+            className="block h-auto w-full min-w-[720px] text-foreground"
+          >
+            <defs>
+              <marker id="lp-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                <path d="M0 0L10 5L0 10z" fill="currentColor" />
+              </marker>
+              <marker id="lp-arr-signal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                <path d="M0 0L10 5L0 10z" className="fill-signal" />
+              </marker>
+            </defs>
+            {/* boundary */}
+            <rect x="10" y="28" width="1160" height="176" rx="12" className="fill-signal-soft/40 stroke-signal" strokeWidth="2" />
+            <text x="26" y="50" className="fill-signal font-mono text-[11px] tracking-[0.08em]">
+              AGENT-TASKS · ONE WORKFLOW
             </text>
-            <g fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="206" y="78" width="80" height="40" rx="6" className="fill-card" />
-              <rect x="298" y="78" width="80" height="40" rx="6" className="fill-card" />
-              <rect x="390" y="78" width="80" height="40" rx="6" className="fill-card" />
-              <line x1="288" y1="98" x2="294" y2="98" markerEnd="url(#arr)" />
-              <line x1="380" y1="98" x2="386" y2="98" markerEnd="url(#arr)" />
-              <path d="M430 120 L430 140 L246 140 L246 124" markerEnd="url(#arr)" className="stroke-signal" />
+            {/* optional human gates */}
+            <g className={svgNote}>
+              <text x={CX(5)} y="72" textAnchor="middle">optional human gate</text>
+              <text x={CX(7)} y="72" textAnchor="middle">optional human gate</text>
             </g>
-            <g textAnchor="middle" className={svgText}>
-              <text x="246" y="102">edit</text>
-              <text x="338" y="102">check</text>
-              <text x="430" y="102">verdict</text>
+            <g fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="2 3">
+              <line x1={CX(5)} y1="75" x2={CX(5)} y2="84" />
+              <line x1={CX(7)} y1="75" x2={CX(7)} y2="84" />
             </g>
-            <g textAnchor="middle" className={svgNote}>
-              <text x="338" y="158">a failure goes back to the agent, with the evidence</text>
+            {/* steps */}
+            {steps.map((s, i) => (
+              <g key={s.t}>
+                <rect
+                  x={X(i)}
+                  y="86"
+                  width="100"
+                  height="44"
+                  rx="6"
+                  className={s.n === "gates" || s.n === "verify" || s.n === "verify live" ? "fill-card stroke-signal" : "fill-card stroke-current"}
+                  strokeWidth="1.5"
+                />
+                <text x={CX(i)} y="112" textAnchor="middle" className={svgText}>
+                  {s.t}
+                </text>
+                <text x={CX(i)} y="150" textAnchor="middle" className={svgNote}>
+                  {s.n}
+                </text>
+                {i < steps.length - 1 && (
+                  <line x1={X(i) + 102} y1="108" x2={X(i + 1) - 3} y2="108" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#lp-arr)" />
+                )}
+              </g>
+            ))}
+            {/* returns: check -> implement (solid); staging and production -> implement (dashed) */}
+            <g fill="none" strokeWidth="1.5" className="stroke-signal">
+              <path d={`M${CX(3) - 34} 130 L${CX(3) - 34} 168 L${CX(2) - 38} 168 L${CX(2) - 38} 133`} markerEnd="url(#lp-arr-signal)" />
+              <path d={`M${CX(6) - 34} 130 L${CX(6) - 34} 186`} strokeDasharray="4 4" />
+              <path d={`M${CX(8) + 38} 130 L${CX(8) + 38} 186 L${CX(2) + 38} 186 L${CX(2) + 38} 133`} strokeDasharray="4 4" markerEnd="url(#lp-arr-signal)" />
             </g>
-          </g>
-          {/* pull request */}
-          <g fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="534" y="70" width="128" height="52" rx="6" />
-          </g>
-          <g textAnchor="middle" className={svgText}>
-            <text x="598" y="92">pull request</text>
-          </g>
-          <g textAnchor="middle" className={svgNote}>
-            <text x="598" y="110">all green, one version</text>
-          </g>
-          {/* staging + release: humans */}
-          <g fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="708" y="70" width="150" height="52" rx="6" />
-          </g>
-          <g textAnchor="middle" className={svgText}>
-            <text x="783" y="92">staging → release</text>
-          </g>
-          <g textAnchor="middle" className={svgNote}>
-            <text x="783" y="110">does it do what was asked?</text>
-            <text x="783" y="142">humans</text>
-          </g>
-          {/* verify in production: a workflow step */}
-          <g>
-            <text x="990" y="60" textAnchor="middle" className="fill-signal font-mono text-[11px] tracking-[0.08em]">
-              AGENT-TASKS
-            </text>
-            <rect x="900" y="70" width="180" height="52" rx="6" className="fill-card stroke-signal" strokeWidth="2" />
-          </g>
-          <g textAnchor="middle" className={svgText}>
-            <text x="990" y="92">verify in production</text>
-          </g>
-          <g textAnchor="middle" className={svgNote}>
-            <text x="990" y="110">the same gates, live</text>
-          </g>
-          {/* connectors */}
-          <g fill="none" stroke="currentColor" strokeWidth="1.5">
-            <line x1="144" y1="96" x2="184" y2="96" markerEnd="url(#arr)" />
-            <line x1="490" y1="96" x2="530" y2="96" markerEnd="url(#arr)" />
-            <line x1="664" y1="96" x2="704" y2="96" markerEnd="url(#arr)" />
-            <line x1="860" y1="96" x2="896" y2="96" markerEnd="url(#arr)" />
-          </g>
-          {/* re-open rail: staging and production failures both return to the loop */}
-          <g fill="none" strokeWidth="1.5" strokeDasharray="4 4" className="stroke-signal">
-            <path d="M836 124 L836 206" />
-            <path d="M1052 124 L1052 206 L338 206 L338 174" markerEnd="url(#arr-signal)" />
-          </g>
-          <g className={svgNote}>
-            <text x="560" y="230">a failure on staging or in production re-opens the loop — and the finding becomes a check</text>
-          </g>
-        </svg>
-        <figcaption className="max-w-[72ch] text-[0.95rem] leading-[1.5] text-muted-foreground">
-          The ends stay human. The middle — the part that repeats fifty times per ticket — becomes
-          something the cluster runs: an agent working in an isolated sandbox, checked on every
-          version, sent back with the evidence when a check fails, stopped when everything passes
-          for the same version or a budget runs out. And once a change is released, verifying it in
-          production is one more step of the same workflow — the same gates, run live — not a
-          person watching a dashboard.
+            <g className={svgNote}>
+              <text x="26" y="232">
+                solid: a failing check goes back to the agent with the evidence · dashed: a failure on staging or in production re-opens the work the same way
+              </text>
+            </g>
+          </svg>
+        </div>
+        <figcaption className="max-w-[74ch] text-[0.95rem] leading-[1.5] text-muted-foreground">
+          One task can run the whole lifecycle. Every box is a step; the ones that check produce a
+          verdict about one exact version of the code, and any failing verdict sends the work back
+          with the evidence. Human approval is a gate you place — before merge, before release,
+          anywhere — or don’t.
         </figcaption>
       </figure>
       <div className="grid gap-6 md:grid-cols-3">
         <div>
-          <h3 className="font-heading text-[1.05rem] font-bold">The agent does the work</h3>
+          <h3 className="font-heading text-[1.05rem] font-bold">Scale with compute, not headcount</h3>
           <p className="mt-1 text-[0.97rem] leading-[1.45] text-muted-foreground">
-            Reproduces the problem, edits the code, writes the tests, and opens the pull request —
-            inside a sandbox that can’t reach anything it shouldn’t.
+            Each task runs in its own sandbox with its own budgets. Ten tickets or a thousand, the
+            workflow is the same; only the compute changes — and verification is the cheap, elastic
+            kind.
           </p>
         </div>
         <div>
-          <h3 className="font-heading text-[1.05rem] font-bold">The gates keep it honest</h3>
+          <h3 className="font-heading text-[1.05rem] font-bold">Trust comes from the gates, not the model</h3>
           <p className="mt-1 text-[0.97rem] leading-[1.45] text-muted-foreground">
-            Lint, unit and integration tests with their logs, complexity limits, CPU and memory
-            deltas, profiles of new functions, docs when required — and an integrity check the team
-            can’t turn off. Each verdict is about one exact version of the code; change the code and
-            it has to be earned again. After release, the same gates can run once more against
-            production.
+            Every verdict is about one exact version. Change the code and it has to be earned again.
+            Required gates come from cluster policy and can’t be removed by the team or the agent.
           </p>
         </div>
         <div>
-          <h3 className="font-heading text-[1.05rem] font-bold">Humans keep the judgement</h3>
+          <h3 className="font-heading text-[1.05rem] font-bold">Humans are a dial, not a boundary</h3>
           <p className="mt-1 text-[0.97rem] leading-[1.45] text-muted-foreground">
-            What to build, how precisely to describe it, and whether the shipped change does what was
-            asked. Those checks scale with tickets, not with agent turns.
+            Put an approval gate where you want one and take it out when the checks have earned it.
+            The default is to fail and report, not to ask — asking doesn’t scale.
           </p>
         </div>
       </div>

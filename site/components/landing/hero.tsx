@@ -31,8 +31,8 @@ export function Hero() {
           own: edit the code, run the checks, and prove the result.
         </p>
         <p className="text-muted-foreground">
-          agent-tasks is that loop — the coding and verification cycle every team already runs,
-          made something a cluster can run for you.
+          agent-tasks makes the whole lifecycle of a change — from filing the ticket to closing it —
+          a workflow your cluster runs, verifies, and scales with compute instead of headcount.
         </p>
       </div>
       <ol aria-label="What exists and what is missing" className="mt-3 grid gap-3.5 md:grid-cols-3">
