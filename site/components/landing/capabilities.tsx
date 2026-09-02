@@ -83,7 +83,7 @@ const phases: Phase[] = [
   },
 ];
 
-function KindBadge({ k }: { k: Kind }) {
+export function KindBadge({ k }: { k: Kind }) {
   if (k === "both") {
     return (
       <span className="flex gap-1">
@@ -117,7 +117,11 @@ export function Capabilities() {
         something to the code, or it{" "}
         <strong className="font-semibold">checks</strong> a version of it and returns
         a verdict. This lifecycle is one example. Yours can add steps, drop steps, or put a person
-        in the middle of one.
+        in the middle of one;{" "}
+        <a href="#teams" className="underline underline-offset-4 decoration-border hover:decoration-current">
+          four teams’ versions are below
+        </a>
+        .
       </p>
       <div className="grid gap-5 md:grid-cols-3">
         {phases.map((ph) => (
