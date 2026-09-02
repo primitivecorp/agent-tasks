@@ -18,6 +18,10 @@
 % the finding becomes a gate so it cannot recur. Concretely: a new gate class,
 % made mandatory through the cluster policy's required gates, injected into
 % every plan admitted from then on (Section 7.5).
+% Production verification is a workflow step, not an afterthought [spec]: the
+% same gates run once more against the released system (smoke checks, health,
+% the behaviour the ticket named), and a failure there re-opens the loop with
+% the finding attached, exactly as a staging failure does.
 
 \subsection{Compounding trust}
 % This loop is the mechanism by which the system becomes more trustworthy over

@@ -13,9 +13,9 @@ export function BecomeTheLoop() {
       </h2>
       <figure className="m-0 grid gap-3">
         <svg
-          viewBox="0 0 880 230"
+          viewBox="0 0 1092 252"
           role="img"
-          aria-label="A ticket, prepared by humans, enters the agent-tasks loop where an agent edits, gates check, and failures return to the agent; the loop produces a pull request; humans verify on staging and release; a staging failure re-opens the loop"
+          aria-label="A ticket, prepared by humans, enters the agent-tasks loop where an agent edits, gates check, and failures return to the agent; the loop produces a pull request; humans verify on staging and release; agent-tasks verifies in production; a failure on staging or in production re-opens the loop"
           className="block h-auto w-full text-foreground"
         >
           <defs>
@@ -70,33 +70,53 @@ export function BecomeTheLoop() {
           <g textAnchor="middle" className={svgNote}>
             <text x="598" y="110">all green, one version</text>
           </g>
-          {/* staging + release */}
+          {/* staging + release: humans */}
           <g fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="708" y="70" width="158" height="52" rx="6" />
+            <rect x="708" y="70" width="150" height="52" rx="6" />
           </g>
           <g textAnchor="middle" className={svgText}>
-            <text x="787" y="92">staging → release</text>
+            <text x="783" y="92">staging → release</text>
           </g>
           <g textAnchor="middle" className={svgNote}>
-            <text x="787" y="110">does it do what was asked?</text>
-            <text x="787" y="142">humans</text>
+            <text x="783" y="110">does it do what was asked?</text>
+            <text x="783" y="142">humans</text>
+          </g>
+          {/* verify in production: a workflow step */}
+          <g>
+            <text x="990" y="60" textAnchor="middle" className="fill-signal font-mono text-[11px] tracking-[0.08em]">
+              AGENT-TASKS
+            </text>
+            <rect x="900" y="70" width="180" height="52" rx="6" className="fill-card stroke-signal" strokeWidth="2" />
+          </g>
+          <g textAnchor="middle" className={svgText}>
+            <text x="990" y="92">verify in production</text>
+          </g>
+          <g textAnchor="middle" className={svgNote}>
+            <text x="990" y="110">the same gates, live</text>
           </g>
           {/* connectors */}
           <g fill="none" stroke="currentColor" strokeWidth="1.5">
             <line x1="144" y1="96" x2="184" y2="96" markerEnd="url(#arr)" />
             <line x1="490" y1="96" x2="530" y2="96" markerEnd="url(#arr)" />
             <line x1="664" y1="96" x2="704" y2="96" markerEnd="url(#arr)" />
-            <path d="M840 124 L840 200 L338 200 L338 174" strokeDasharray="4 4" markerEnd="url(#arr-signal)" className="stroke-signal" />
+            <line x1="860" y1="96" x2="896" y2="96" markerEnd="url(#arr)" />
+          </g>
+          {/* re-open rail: staging and production failures both return to the loop */}
+          <g fill="none" strokeWidth="1.5" strokeDasharray="4 4" className="stroke-signal">
+            <path d="M836 124 L836 206" />
+            <path d="M1052 124 L1052 206 L338 206 L338 174" markerEnd="url(#arr-signal)" />
           </g>
           <g className={svgNote}>
-            <text x="560" y="194">fails on staging → the loop re-opens, and the finding becomes a check</text>
+            <text x="560" y="230">a failure on staging or in production re-opens the loop — and the finding becomes a check</text>
           </g>
         </svg>
         <figcaption className="max-w-[72ch] text-[0.95rem] leading-[1.5] text-muted-foreground">
           The ends stay human. The middle — the part that repeats fifty times per ticket — becomes
           something the cluster runs: an agent working in an isolated sandbox, checked on every
           version, sent back with the evidence when a check fails, stopped when everything passes
-          for the same version or a budget runs out.
+          for the same version or a budget runs out. And once a change is released, verifying it in
+          production is one more step of the same workflow — the same gates, run live — not a
+          person watching a dashboard.
         </figcaption>
       </figure>
       <div className="grid gap-6 md:grid-cols-3">
@@ -112,7 +132,7 @@ export function BecomeTheLoop() {
           <p className="mt-1 text-[0.97rem] leading-[1.45] text-muted-foreground">
             Unit tests, integration tests, lint, format, and an integrity check the team can’t turn
             off. Each verdict is about one exact version of the code; change the code and it has to
-            be earned again.
+            be earned again. After release, the same gates can run once more against production.
           </p>
         </div>
         <div>

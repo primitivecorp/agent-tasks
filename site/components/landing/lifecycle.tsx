@@ -103,7 +103,15 @@ const stages: Stage[] = [
     detail: "If staging passes, the change ships.",
     today: ["engineering"],
     after: ["engineering"],
-    afterNote: "Unchanged.",
+    afterNote: "Unchanged. Releasing stays a human decision; what follows it no longer has to be.",
+  },
+  {
+    title: "Verify in production",
+    detail: "After the release, confirm the change works where it matters — usually informally: someone watches dashboards, or waits for a report.",
+    today: ["engineering"],
+    after: ["agent", "engineering"],
+    afterNote:
+      "A step of the workflow, not an afterthought. The same gates run against production after the release — smoke checks, health, the specific behaviour the ticket named. If it fails, the loop re-opens with the evidence, exactly as it does for staging.",
   },
   {
     title: "Ticket completed",
