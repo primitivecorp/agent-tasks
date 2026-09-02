@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { GateBoard } from "./gate-board";
 import { Lineage } from "./lineage";
 import { steps, versions } from "./steps";
 
 const actorDot = {
-  idle: "bg-line",
-  live: "bg-accent animate-pulse motion-reduce:animate-none",
+  idle: "bg-border",
+  live: "bg-signal animate-pulse motion-reduce:animate-none",
   done: "bg-pass",
 } as const;
 
@@ -43,31 +47,35 @@ export function Stepper() {
     >
       <div className="grid gap-3.5 md:sticky md:top-5">
         <div className="grid gap-1.5">
-          <span className="font-mono text-[0.8rem] tracking-[0.04em] text-muted">
+          <span className="font-mono text-[0.8rem] tracking-[0.04em] text-muted-foreground">
             Step {i + 1} of {steps.length}
           </span>
-          <h2 className="font-display text-[1.55rem] font-bold leading-[1.15] tracking-tight text-balance">
+          <h2 className="font-heading text-[1.55rem] font-bold leading-[1.15] tracking-tight text-balance">
             {s.title}
           </h2>
         </div>
         <p className="prose-code text-[1.06rem] md:min-h-[9.5em] [&_strong]:font-semibold">
           {s.body}
         </p>
-        <details className="sys border-l-2 border-line pl-3">
-          <summary className="font-mono text-[0.8rem] uppercase tracking-[0.04em] text-muted">
-            In system terms
-          </summary>
-          <p className="mt-2 font-mono text-[0.84rem] leading-normal text-muted">{s.sys}</p>
-        </details>
-        <nav aria-label="Walkthrough controls" className="mt-1.5 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => go(i - 1)}
-            disabled={i === 0}
-            className="whitespace-nowrap rounded-md border-[1.5px] border-ink bg-surface px-3.5 py-2 text-[0.95rem] font-semibold text-ink disabled:cursor-default disabled:opacity-35"
+        <Collapsible className="border-l-2 border-border pl-3">
+          <CollapsibleTrigger
+            render={<Button variant="ghost" size="sm" />}
+            className="group -ml-2 h-7 gap-1 px-2 font-mono text-[0.78rem] uppercase tracking-[0.04em] text-muted-foreground"
           >
-            ← Back
-          </button>
+            <ChevronRightIcon className="transition-transform group-data-[panel-open]:rotate-90" />
+            In system terms
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <p className="mt-2 font-mono text-[0.84rem] leading-normal text-muted-foreground">
+              {s.sys}
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
+        <nav aria-label="Walkthrough controls" className="mt-1.5 flex items-center gap-3">
+          <Button variant="outline" onClick={() => go(i - 1)} disabled={i === 0}>
+            <ArrowLeftIcon />
+            Back
+          </Button>
           <ol aria-label="Steps" className="mx-auto flex gap-[7px]">
             {steps.map((st, k) => (
               <li key={st.title}>
@@ -78,59 +86,54 @@ export function Stepper() {
                   onClick={() => go(k)}
                   className={`block h-[11px] w-[11px] rounded-full border-[1.5px] ${
                     k === i
-                      ? "border-accent bg-accent"
+                      ? "border-signal bg-signal"
                       : k < i
-                        ? "border-muted bg-muted"
-                        : "border-muted bg-transparent"
+                        ? "border-muted-foreground bg-muted-foreground"
+                        : "border-muted-foreground bg-transparent"
                   }`}
                 />
               </li>
             ))}
           </ol>
-          <button
-            type="button"
-            onClick={() => go(i + 1)}
-            disabled={i === last}
-            className="whitespace-nowrap rounded-md border-[1.5px] border-ink bg-ink px-3.5 py-2 text-[0.95rem] font-semibold text-bg disabled:cursor-default disabled:opacity-35"
-          >
-            {i === last ? "Finished" : "Next →"}
-          </button>
+          <Button onClick={() => go(i + 1)} disabled={i === last}>
+            {i === last ? "Finished" : "Next"}
+            {i !== last && <ArrowRightIcon />}
+          </Button>
         </nav>
       </div>
 
-      <div
-        aria-live="polite"
-        className="grid gap-5.5 rounded-[10px] border border-line bg-surface px-5.5 pt-5 pb-5.5"
-      >
-        <div className="flex min-h-[1.6em] items-center gap-2.5 text-[0.98rem] font-semibold">
-          <span
-            aria-hidden="true"
-            className={`h-2.5 w-2.5 flex-none rounded-full ${actorDot[s.actor.kind]}`}
-          />
-          <span>{s.actor.text}</span>
-        </div>
-        <figure className="m-0">
-          <Lineage cur={s.cur} />
-          <figcaption className="mt-1.5 flex min-h-[1.8em] flex-wrap items-center gap-2 text-[0.9rem] text-muted">
-            {s.changed && s.changed.length > 0 ? (
-              <>
-                <span>{version.id} changed:</span>
-                {s.changed.map((p) => (
-                  <span
-                    key={p}
-                    className="rounded bg-code-bg px-2 py-0.5 font-mono text-[0.78rem] text-ink"
-                  >
-                    {p}
-                  </span>
-                ))}
-              </>
-            ) : (
-              <span>{version.id} is the code on the main branch, untouched.</span>
-            )}
-          </figcaption>
-        </figure>
-        <GateBoard gates={s.gates} />
-      </div>
+      <Card aria-live="polite">
+        <CardContent className="grid gap-5.5">
+          <div className="flex min-h-[1.6em] items-center gap-2.5 text-[0.98rem] font-semibold">
+            <span
+              aria-hidden="true"
+              className={`h-2.5 w-2.5 flex-none rounded-full ${actorDot[s.actor.kind]}`}
+            />
+            <span>{s.actor.text}</span>
+          </div>
+          <figure className="m-0">
+            <Lineage cur={s.cur} />
+            <figcaption className="mt-1.5 flex min-h-[1.8em] flex-wrap items-center gap-2 text-[0.9rem] text-muted-foreground">
+              {s.changed && s.changed.length > 0 ? (
+                <>
+                  <span>{version.id} changed:</span>
+                  {s.changed.map((p) => (
+                    <span
+                      key={p}
+                      className="rounded bg-code px-2 py-0.5 font-mono text-[0.78rem] text-foreground"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </>
+              ) : (
+                <span>{version.id} is the code on the main branch, untouched.</span>
+              )}
+            </figcaption>
+          </figure>
+          <GateBoard gates={s.gates} />
+        </CardContent>
+      </Card>
     </section>
   );
 }

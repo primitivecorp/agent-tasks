@@ -21,7 +21,7 @@ export function Lineage({ cur }: { cur: number }) {
           markerHeight="7"
           orient="auto"
         >
-          <path d="M0 0L10 5L0 10z" className="fill-ink" />
+          <path d="M0 0L10 5L0 10z" className="fill-foreground" />
         </marker>
       </defs>
       {versions.map((v, i) => {
@@ -37,7 +37,7 @@ export function Lineage({ cur }: { cur: number }) {
                 y1={52}
                 x2={cx - 60}
                 y2={52}
-                className="stroke-ink"
+                className="stroke-foreground"
                 strokeWidth={1.5}
                 strokeDasharray={future ? "4 4" : undefined}
                 markerEnd="url(#lineage-arrow)"
@@ -49,11 +49,7 @@ export function Lineage({ cur }: { cur: number }) {
               width={104}
               height={44}
               rx={8}
-              className={
-                current
-                  ? "fill-surface stroke-accent"
-                  : "fill-surface-2 stroke-muted"
-              }
+              className={current ? "fill-card stroke-signal" : "fill-muted stroke-muted-foreground"}
               strokeWidth={current ? 2.5 : 1.25}
               strokeDasharray={future ? "4 4" : undefined}
             />
@@ -61,7 +57,7 @@ export function Lineage({ cur }: { cur: number }) {
               x={cx}
               y={58}
               textAnchor="middle"
-              className="fill-ink font-mono text-[17px] font-medium"
+              className="fill-foreground font-mono text-[17px] font-medium"
             >
               {v.id}
             </text>
@@ -69,7 +65,7 @@ export function Lineage({ cur }: { cur: number }) {
               x={cx}
               y={100}
               textAnchor="middle"
-              className="fill-muted font-sans text-[12px]"
+              className="fill-muted-foreground font-sans text-[12px]"
             >
               {v.by}
             </text>
@@ -78,7 +74,7 @@ export function Lineage({ cur }: { cur: number }) {
                 x={cx}
                 y={18}
                 textAnchor="middle"
-                className="fill-accent font-mono text-[11px] tracking-[0.08em]"
+                className="fill-signal font-mono text-[11px] tracking-[0.08em]"
               >
                 CURRENT
               </text>

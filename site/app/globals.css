@@ -1,108 +1,179 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /*
- * Visual identity for the agent-tasks site.
- * Cool graphite neutrals with a blue bias; one burnt-orange accent reserved for
- * "happening right now"; a separate semantic trio for gate verdicts.
+ * shadcn/ui tokens (base-nova, neutral) with the agent-tasks identity as their
+ * values: cool graphite neutrals with a blue bias. Semantic verdict colors and
+ * the single "happening now" signal hue are additions, kept apart from the
+ * component palette so they never collide with shadcn's own accent role.
  */
 :root {
-  --bg: #f2f4f7;
-  --surface: #ffffff;
-  --surface-2: #e9edf2;
-  --ink: #15202b;
-  --muted: #5c6b7a;
-  --line: #d5dce4;
-  --accent: #d9531e;
-  --accent-ink: #ffffff;
-  --accent-soft: #fbe9e0;
+  --background: #f2f4f7;
+  --foreground: #15202b;
+  --card: #ffffff;
+  --card-foreground: #15202b;
+  --popover: #ffffff;
+  --popover-foreground: #15202b;
+  --primary: #15202b;
+  --primary-foreground: #f2f4f7;
+  --secondary: #e9edf2;
+  --secondary-foreground: #15202b;
+  --muted: #e9edf2;
+  --muted-foreground: #5c6b7a;
+  --accent: #e9edf2;
+  --accent-foreground: #15202b;
+  --destructive: #c23a31;
+  --border: #d5dce4;
+  --input: #d5dce4;
+  --ring: #1f5fd0;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #15202b;
+  --sidebar-primary: #15202b;
+  --sidebar-primary-foreground: #f2f4f7;
+  --sidebar-accent: #e9edf2;
+  --sidebar-accent-foreground: #15202b;
+  --sidebar-border: #d5dce4;
+  --sidebar-ring: #1f5fd0;
+
+  /* Site additions. */
+  --signal: #d9531e;
+  --signal-foreground: #ffffff;
+  --signal-soft: #fbe9e0;
   --pass: #1e8a5b;
-  --pass-bg: #e3f4eb;
+  --pass-soft: #e3f4eb;
   --fail: #c23a31;
-  --fail-bg: #fae6e4;
-  --unk: #a7781b;
-  --unk-bg: #fbf1dc;
-  --code-bg: #eef1f5;
-  --focus: #1f5fd0;
+  --fail-soft: #fae6e4;
+  --unknown: #a7781b;
+  --unknown-soft: #fbf1dc;
+  --code: #eef1f5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e141a;
-    --surface: #151d25;
-    --surface-2: #1c2731;
-    --ink: #e7edf2;
-    --muted: #8c9baa;
-    --line: #2b3846;
-    --accent: #f07a3f;
-    --accent-ink: #161616;
-    --accent-soft: #3a2417;
-    --pass: #4cc38a;
-    --pass-bg: #15302a;
-    --fail: #ef6b62;
-    --fail-bg: #3a2020;
-    --unk: #d8ae57;
-    --unk-bg: #332b18;
-    --code-bg: #1a232c;
-    --focus: #7fb0ff;
-  }
+.dark {
+  --background: #0e141a;
+  --foreground: #e7edf2;
+  --card: #151d25;
+  --card-foreground: #e7edf2;
+  --popover: #151d25;
+  --popover-foreground: #e7edf2;
+  --primary: #e7edf2;
+  --primary-foreground: #0e141a;
+  --secondary: #1c2731;
+  --secondary-foreground: #e7edf2;
+  --muted: #1c2731;
+  --muted-foreground: #8c9baa;
+  --accent: #1c2731;
+  --accent-foreground: #e7edf2;
+  --destructive: #ef6b62;
+  --border: #2b3846;
+  --input: #2b3846;
+  --ring: #7fb0ff;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: #151d25;
+  --sidebar-foreground: #e7edf2;
+  --sidebar-primary: #e7edf2;
+  --sidebar-primary-foreground: #0e141a;
+  --sidebar-accent: #1c2731;
+  --sidebar-accent-foreground: #e7edf2;
+  --sidebar-border: #2b3846;
+  --sidebar-ring: #7fb0ff;
+
+  --signal: #f07a3f;
+  --signal-foreground: #161616;
+  --signal-soft: #3a2417;
+  --pass: #4cc38a;
+  --pass-soft: #15302a;
+  --fail: #ef6b62;
+  --fail-soft: #3a2020;
+  --unknown: #d8ae57;
+  --unknown-soft: #332b18;
+  --code: #1a232c;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-ink: var(--ink);
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-display), var(--font-sans);
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
-  --color-line: var(--line);
+  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-accent-soft: var(--accent-soft);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Site additions. */
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+  --color-signal-soft: var(--signal-soft);
   --color-pass: var(--pass);
-  --color-pass-bg: var(--pass-bg);
+  --color-pass-soft: var(--pass-soft);
   --color-fail: var(--fail);
-  --color-fail-bg: var(--fail-bg);
-  --color-unk: var(--unk);
-  --color-unk-bg: var(--unk-bg);
-  --color-code-bg: var(--code-bg);
-  --color-focus: var(--focus);
-  --font-display: var(--font-display), var(--font-body), system-ui, sans-serif;
-  --font-sans: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-fail-soft: var(--fail-soft);
+  --color-unknown: var(--unknown);
+  --color-unknown-soft: var(--unknown-soft);
+  --color-code: var(--code);
 }
 
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: 17px;
-  line-height: 1.55;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 17px;
+    line-height: 1.55;
+  }
 }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* Inline code in prose. */
+/* Inline code in running prose. */
 .prose-code code {
   font-family: var(--font-mono);
   font-size: 0.92em;
-  background: var(--code-bg);
+  background: var(--code);
   padding: 0.05em 0.35em;
   border-radius: 4px;
-}
-
-/* The "In system terms" disclosure: a plus/minus marker instead of the default triangle. */
-details.sys > summary {
-  list-style: none;
-  cursor: pointer;
-}
-details.sys > summary::-webkit-details-marker {
-  display: none;
-}
-details.sys > summary::before {
-  content: "+ ";
-}
-details.sys[open] > summary::before {
-  content: "– ";
 }
