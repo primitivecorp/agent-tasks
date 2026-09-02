@@ -24,7 +24,12 @@
 % Exactly one authored action per workflow, the driver [impl]. Fix actions are
 %   synthesised at resolution as <gate>@fix, never authored; multi-action
 %   workflows return only with defined re-run semantics [spec].
-% Include the minimal and the full example listings side by side.
+% Include the minimal and the full example listings side by side. The full
+% listing should show the breadth a real loop carries -- gate classes: lint,
+% unit, integration with log assertions, cyclomatic complexity, CPU/memory
+% deltas, profiles of new or hot functions, docs-required, the integrity
+% meta-gate; action classes: implement (driver), format-fix, simplify and
+% de-comment, docs-writer -- and how each maps onto Action or Gate.
 
 \subsection{Resolution and version pinning}
 % Resolution: an explicit workflowRef [impl]; tag match, repo match, sole

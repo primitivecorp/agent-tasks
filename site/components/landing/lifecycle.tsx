@@ -29,7 +29,7 @@ type Stage = {
   today: Owner[];
   after: Owner[];
   afterNote: string;
-  loop?: { steps: string[]; until: string };
+  loop?: { actions: string[]; gates: string[]; until: string };
 };
 
 const stages: Stage[] = [
@@ -69,18 +69,27 @@ const stages: Stage[] = [
     afterNote:
       "agent-tasks runs this. An agent edits in its sandbox; every version is checked by the gates; a failure goes back to the agent with the evidence; a review change re-enters the loop. It stops only when every required check passes for the same version — or a budget says stop.",
     loop: {
-      steps: [
+      actions: [
         "write the code",
-        "unit tests",
-        "integration tests",
-        "lint",
+        "add unit tests",
+        "add integration tests",
+        "simplify; remove unnecessary comments",
+        "write user-facing docs, if required",
         "format",
-        "verify locally",
         "open or update the PR",
-        "review discussion",
-        "changes → again",
+        "respond to review → again",
       ],
-      until: "until all humans and automation pass",
+      gates: [
+        "lint",
+        "unit tests pass",
+        "integration tests pass, logs clean",
+        "cyclomatic complexity within limits",
+        "CPU and memory deltas within bounds",
+        "profiles for new or hot functions",
+        "docs updated when required",
+        "integrity: nothing suppressed or deleted",
+      ],
+      until: "until every human reviewer and every check passes — for the same version",
     },
   },
   {
@@ -121,6 +130,28 @@ const stages: Stage[] = [
     afterNote: "Status flows back to the ticket automatically at every stage, not just the last one.",
   },
 ];
+
+function ChipGroup({ label, items, accent }: { label: string; items: string[]; accent?: boolean }) {
+  return (
+    <div className="grid gap-1.5">
+      <span className="font-mono text-[0.7rem] uppercase tracking-[0.06em] text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((it) => (
+          <span
+            key={it}
+            className={`rounded px-2 py-0.5 font-mono text-[0.76rem] ${
+              accent ? "border border-signal/40 bg-card text-foreground" : "bg-code text-foreground"
+            }`}
+          >
+            {it}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Owners({ owners }: { owners: Owner[] }) {
   return (
@@ -173,19 +204,11 @@ export function Lifecycle() {
                 </div>
                 <p className="text-[0.92rem] leading-[1.45] text-muted-foreground">{s.detail}</p>
                 {s.loop && (
-                  <div className="mt-1.5 grid gap-2 rounded-md bg-muted px-3 py-2.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {s.loop.steps.map((st) => (
-                        <span
-                          key={st}
-                          className="rounded bg-code px-2 py-0.5 font-mono text-[0.76rem] text-foreground"
-                        >
-                          {st}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="mt-1.5 grid gap-2.5 rounded-md bg-muted px-3 py-2.5">
+                    <ChipGroup label="the agent does" items={s.loop.actions} />
+                    <ChipGroup label="the checks that must pass" items={s.loop.gates} accent />
                     <p className="flex items-center gap-1.5 text-[0.85rem] text-muted-foreground">
-                      <RepeatIcon aria-hidden="true" className="size-3.5 text-signal" />
+                      <RepeatIcon aria-hidden="true" className="size-3.5 shrink-0 text-signal" />
                       {s.loop.until}
                     </p>
                   </div>

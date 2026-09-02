@@ -130,9 +130,11 @@ export function BecomeTheLoop() {
         <div>
           <h3 className="font-heading text-[1.05rem] font-bold">The gates keep it honest</h3>
           <p className="mt-1 text-[0.97rem] leading-[1.45] text-muted-foreground">
-            Unit tests, integration tests, lint, format, and an integrity check the team can’t turn
-            off. Each verdict is about one exact version of the code; change the code and it has to
-            be earned again. After release, the same gates can run once more against production.
+            Lint, unit and integration tests with their logs, complexity limits, CPU and memory
+            deltas, profiles of new functions, docs when required — and an integrity check the team
+            can’t turn off. Each verdict is about one exact version of the code; change the code and
+            it has to be earned again. After release, the same gates can run once more against
+            production.
           </p>
         </div>
         <div>
