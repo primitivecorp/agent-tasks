@@ -1,0 +1,107 @@
+---
+title: "Authoring step classes"
+description: "Define the Actions and Gates a cluster offers, as an administrator."
+---
+
+An `AgentStepClass` declares one executable capability. Teams compose classes into workflows
+but cannot change what a class does, so the class library is where a platform team decides
+what may run.
+
+## Action or Gate
+
+```yaml title="A gate, its fix action, and the agent"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: lint-python
+spec:
+  kind: Gate
+  executor: Fake
+  image: sandbox/toolchain-python:v1
+  command: ["ruff", "check", "--output-format=json"]
+  timeout: 2m
+  blocking: true
+  fixAction: lint-python-fix
+  evidence:
+    format: json
+---
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: lint-python-fix
+spec:
+  kind: Action
+  executor: Fake
+  image: sandbox/toolchain-python:v1
+  command: ["ruff", "check", "--fix"]
+  timeout: 2m
+---
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: coding-agent
+spec:
+  kind: Action
+  executor: Fake
+  image: sandbox/agent:v1
+  timeout: 15m
+  turnBudget: 40
+  tokenBudget: 200000
+```
+
+- **Gates** may set `blocking` (default `true`), `fixAction` and `evidence`. They run against a
+  read-only workspace and return `Passed` or `Failed` with evidence.
+- **Actions** may set `turnBudget` and `tokenBudget`, per-invocation bounds the executor
+  enforces. Executors that do not consume turns ignore them.
+- `kind` is immutable. Gate-only fields are rejected on an Action and vice versa.
+
+## Executors
+
+| Executor      | Runs                                                              | Availability |
+| ------------- | ----------------------------------------------------------------- | ------------ |
+| `Fake`        | Scripted results from a ConfigMap, for exercising the loop.       | Phase 1      |
+| `SandboxExec` | The command inside the task's sandbox, agent turns included.      | Phase 2      |
+| `Job`         | A Kubernetes Job in the task's work namespace.                    | Phase 2      |
+| `Http`        | A call to a connector, which acts with its own credentials.       | Phase 2      |
+| `Observed`    | Nothing: the gate's verdict arrives as an observation.            | Phase 2      |
+
+## Fix actions
+
+A gate that names a `fixAction` gets a synthesized Action, `<gate>@fix`, at plan resolution.
+It runs before the agent is asked to fix a failure, at most once per snapshot and at most
+`fixAttemptsPerGate` times over the task. Reach for it wherever a tool can repair its own
+finding: formatters, import sorters, lint autofix, dependency lockfile refresh.
+
+## Evidence
+
+`evidence.format` is one of `junit`, `sarif`, `json`, `text`. The executor copies evidence out
+of tool output; a file the agent could write inside the workspace is never the source of
+record. Inline evidence is capped at 4 KiB with a reference to the full artifact.
+
+## What to make a gate
+
+Anything that returns a verdict about a version of the code. Beyond lint and unit tests:
+
+| Gate                           | Judges                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| Integration tests with log assertions | Behaviour plus the absence of errors in logs during the run       |
+| Cyclomatic complexity          | A ceiling per function or per file                                       |
+| CPU and memory deltas          | Resource use of a benchmark against the base snapshot                    |
+| Profiles of new or hot functions | Whether new code introduced a hot spot                                 |
+| Docs required                  | That user-facing documentation changed when the public surface did      |
+| Integrity                      | That no test was skipped, disabled or weakened; typically policy-required |
+
+And what to make an Action: the agent, formatters, a de-commenting or simplification pass, a
+docs writer. Each is either the driver or a fix action attached to the gate it satisfies.
+
+## Rules checked at admission
+
+- `fixAction` names an existing class of `kind: Action`.
+- A class referenced by a workflow is in the policy's `allowedClasses`.
+- Gate steps reference Gate classes; Action steps reference Action classes.
+
+## Changing a class
+
+Running tasks keep the class content they were admitted with. New tasks pick up the change.
+Superseding running tasks is a policy decision, made by cancelling and recreating them, never
+by loosening pinning.

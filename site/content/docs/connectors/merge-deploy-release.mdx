@@ -1,0 +1,118 @@
+---
+title: "Merge, deploy and release"
+description: "Your merge queue, your CD system, your flags and your approvals plugged into a workflow as Actions and Gates, shown as four teams' workflows."
+---
+
+<Callout title="Phase 2" type="info">
+  The mechanics here are designed in the specification's section 12.
+</Callout>
+
+## The operator does not choose
+
+How a team merges, deploys and releases is the team's workflow. A merge queue, a CD system, a
+flag service and an approval UI are connectors, plugged in as an Action (do this) or a Gate
+(tell me the verdict). The operator never learns which. It guarantees provenance and
+per-snapshot validity; attribution, deciding which change broke a shared environment, is the
+connector's job, exactly as it is for the team's people today.
+
+Four teams below use the same kinds and differ only in the steps they authored after the pull
+request. Comments mark the class kind, `A` for Action and `G` for Gate, and for observed gates
+the connector that speaks.
+
+## One lane
+
+A small team, one service, no merge queue. The reference lane connector grants one turn at a
+time per environment chain; FIFO is its only setting. Every deployment carries one change, so a
+failing environment gate is that change's. Waiting costs nothing: the sandbox is released while
+the task waits its turn.
+
+```yaml
+steps:
+  - {name: pull-request,  class: open-pr,        after: [unit]}          # A  Http, SCM
+  - {name: review,        class: pr-review,      after: [pull-request]}  # G  Observed, SCM
+  - {name: turn,          class: lane-turn,      after: [review], maxWait: 8h}  # G  Observed, lane
+  - {name: integrated,    class: integrated,     after: [turn]}          # G  Diff; fix: integrate
+  - {name: merge,         class: merge-ff,       after: [integrated]}    # A  Http, SCM
+  - {name: staging-smoke, class: smoke,          after: [merge],
+     environment: staging, maxWait: 1h}                                  # G  Environment
+  - {name: release,       class: release,        after: [staging-smoke]} # A  Http, CD
+  - {name: prod-smoke,    class: smoke,          after: [release],
+     environment: production, maxWait: 2h}                               # G  Environment
+  - {name: close,         class: close-ticket,   after: [prod-smoke]}    # A  Http, tracker
+```
+
+## A monorepo with a merge queue
+
+Thousands of changes a day. The team's queue batches and speculates however it likes; its CD
+system runs its own canary analysis. A rejected batch reaches the task as a `Failed` verdict
+carrying the queue's evidence, and the agent's next version re-enqueues. The plan is identical
+at every batch size.
+
+```yaml
+steps:
+  - {name: pull-request, class: open-pr,         after: [affected-tests]} # A  Http, SCM
+  - {name: review,       class: pr-review,       after: [pull-request]}   # G  Observed, SCM
+  - {name: merge,        class: enqueue,         after: [review]}         # A  Http, merge queue
+  - {name: landed,       class: queue-landed,    after: [merge], maxWait: 4h}   # G  Observed, queue
+  - {name: canary,       class: canary-analysis, after: [landed],
+     environment: production, maxWait: 2h}                               # G  Observed, CD
+  - {name: close,        class: close-ticket,    after: [canary]}         # A  Http, tracker
+```
+
+## Release by flag
+
+Deploy is not release. Code lands in bulk, and each change is released, judged and rolled back
+by its own flag, so production verification is per change with nothing serialized.
+`flag-off` is the fix action; the agent then fixes forward and the new version walks the
+chain again.
+
+```yaml
+steps:
+  # … pull-request, review, merge, landed as above …
+  - {name: deployed,     class: env-contains,  after: [landed],
+     environment: production}                                            # G  Environment
+  - {name: flag-cohort,  class: flag-on,       after: [deployed]}        # A  Http, flags (cohort=1%)
+  - {name: flag-metrics, class: flag-analysis, after: [flag-cohort], maxWait: 1h}  # G  Observed, flags
+  - {name: flag-all,     class: flag-on,       after: [flag-metrics]}    # A  Http, flags (cohort=100%)
+  - {name: close,        class: close-ticket,  after: [flag-all]}        # A  Http, tracker
+```
+
+## Preview only
+
+Everything is verified before merge, in isolation and in parallel across tasks. A
+`deploy-preview` Action runs as a Job in the task's own work namespace, whose network policy
+is the isolation, and sets the environment record itself. No connector is needed for the
+environment; production is left to the team's CD.
+
+```yaml
+steps:
+  - {name: deploy-preview, class: preview-deploy, after: [unit]}          # A  Job in the work namespace
+  - {name: e2e,            class: e2e-browser,    after: [deploy-preview],
+     environment: preview}                                                # G  Environment
+  - {name: pull-request,   class: open-pr,        after: [e2e]}           # A  Http, SCM
+  - {name: review,         class: pr-review,      after: [pull-request]}  # G  Observed, SCM
+  - {name: merge,          class: merge-ff,       after: [review]}        # A  Http, SCM
+  - {name: close,          class: close-ticket,   after: [merge]}         # A  Http, tracker
+```
+
+## What holds across all four
+
+- The operator never learned what a merge queue, a canary or a flag is.
+- Each strategy's throughput and attribution properties belong to its connector.
+- A person can be placed before any step, by the team authoring an approval gate or by policy
+  injecting one with `approvalGates`.
+- The task still closes its own ticket.
+
+## Approvals as policy
+
+```yaml title="AgentClusterPolicy, Phase 2 fields"
+spec:
+  allowedObservationSources: [linear, github, lane, argo-cd, flags, approvals]
+  approvalGates:
+    - before: release          # an Action class
+      source: approvals        # the connector whose verdicts count
+```
+
+For every workflow step of the named class, admission injects an observed approval gate
+immediately before it, blocking, invalidated by any change, unremovable by the team. Turning
+the autonomy dial for a class is adding or removing one injected gate.

@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "index",
+    "roadmap",
+    "---Getting started---",
+    "install",
+    "first-task",
+    "---Concepts---",
+    "...concepts",
+    "---Guides---",
+    "...guides",
+    "---Connectors---",
+    "...connectors",
+    "---Reference---",
+    "...reference"
+  ]
+}

@@ -1,0 +1,97 @@
+---
+title: "Install the operator"
+description: "Requirements, what gets installed, and how to confirm the operator is running."
+---
+
+<Callout title="As specified" type="info">
+  The manifests referenced here are the ones the specification defines for the first release.
+  Until that release is cut, build them from the repository with the standard kubebuilder
+  targets.
+</Callout>
+
+## Requirements
+
+- **Kubernetes 1.29 or newer.** The resources use CEL validation rules and transition rules on
+  their schemas, which need a recent API server.
+- **A CNI that enforces `NetworkPolicy`.** Each task gets its own namespace with default-deny
+  network policies from the operator's built-in library. Without enforcement the isolation is
+  declared but not real.
+- **`kubectl`** and cluster-admin access to install custom resource definitions and RBAC.
+- Optional, for real sandboxes later: a `RuntimeClass` for microVM isolation (for example
+  `kata-qemu`), which the policy can require for pods in work namespaces.
+
+## What gets installed
+
+- The five custom resource definitions in the group `agents.primitive.dev`.
+- The operator, a single Deployment in the `agent-tasks-system` namespace running both
+  controllers.
+- RBAC for the operator's service account: read on classes, policy and workflows, read plus
+  finalizers on tasks, write on steps, sole writer of every status subresource, and create and
+  delete on `Namespace`, `ResourceQuota`, `LimitRange` and `NetworkPolicy` for work-namespace
+  lifecycle.
+
+Teams get write on `AgentWorkflow` and `AgentTask` and read on everything else. Administrators
+write `AgentStepClass` and `AgentClusterPolicy`. Nothing but the operator writes status.
+
+## Install
+
+<Steps>
+<Step>
+
+### Apply the definitions and the operator
+
+```bash
+kubectl apply -k github.com/primitivecorp/agent-tasks/config/default
+```
+
+`config/default` is the kubebuilder entry point: it applies `config/crd`, `config/rbac` and
+the manager Deployment together.
+
+</Step>
+<Step>
+
+### Confirm the resources exist
+
+```bash
+kubectl get crd | grep agents.primitive.dev
+```
+
+```text
+agentclusterpolicies.agents.primitive.dev
+agentstepclasses.agents.primitive.dev
+agentsteps.agents.primitive.dev
+agenttasks.agents.primitive.dev
+agentworkflows.agents.primitive.dev
+```
+
+</Step>
+<Step>
+
+### Confirm the operator is running
+
+```bash
+kubectl -n agent-tasks-system get deploy
+```
+
+The controller manager should report one ready replica. Its logs are structured and carry the
+task name, step name and current snapshot on every line, which is how you follow a task later.
+
+</Step>
+<Step>
+
+### Create the cluster policy
+
+A cluster without an `AgentClusterPolicy` named `default` admits **no tasks**. This is
+deliberate: an unconstrained cluster is never the default. Continue with
+[the cluster policy](/docs/install/policy).
+
+</Step>
+</Steps>
+
+## Executors
+
+The first release ships the **fake executor**: it replays results scripted in a ConfigMap, so
+the full loop, including every failure and escalation path, can be exercised without a
+sandbox. Real executors follow in Phase 2: `SandboxExec` for agent turns and gates inside a
+per-task sandbox, `Job` for ordinary workloads in the work namespace, and `Http` for actions a
+[connector](/docs/connectors) performs with its own credentials.

@@ -1,0 +1,97 @@
+---
+title: "Verify the installation"
+description: "Run the reference task under the fake executor and watch it converge, escalate and clean up."
+---
+
+The repository ships an acceptance fixture: the `default` policy, a small class library, one
+workflow, one task, and a ConfigMap that scripts the fake executor's results. Applying it
+exercises the whole loop without a sandbox.
+
+<Steps>
+<Step>
+
+### Apply the fixture
+
+```bash
+kubectl apply -f github.com/primitivecorp/agent-tasks/test/e2e/testdata/
+```
+
+This creates the policy, the classes (`coding-agent`, `lint-python`, `lint-python-fix`,
+`test-pytest`, `integrity-check`), the workflow `python-minimal`, the task `fix-csv-export`,
+and the executor script.
+
+</Step>
+<Step>
+
+### Wait for the task to succeed
+
+```bash
+kubectl wait --for=condition=Succeeded agenttask/fix-csv-export \
+  -n agent-tasks-platform --timeout=2m
+```
+
+`Succeeded` is set only after the task has converged **and** its work namespace has been
+observed gone, so this wait also proves cleanup.
+
+</Step>
+<Step>
+
+### Read what happened
+
+```bash
+kubectl get agenttask fix-csv-export -n agent-tasks-platform
+```
+
+```text
+NAME             WORKFLOW         PHASE       SNAPSHOT  DRIVER  TOKENS  AGE
+fix-csv-export   python-minimal   Succeeded   h3        2/5     0       94s
+```
+
+```bash
+kubectl get agentsteps -n agent-tasks-platform --sort-by=.status.startedAt
+```
+
+The steps, in order: `implement` (attempt 1, produced `h1`), `lint` (failed at `h1`),
+`lint@fix` (produced `h2`), `lint` (passed at `h2`), `unit` (failed at `h2`), `implement`
+(attempt 2, produced `h3`), then `lint`, `unit` and `integrity@policy` all passing at `h3`.
+That is the [reference trace](/docs/first-task#what-happened) the specification pins.
+
+</Step>
+</Steps>
+
+## What the fixture also proves
+
+The acceptance suite runs the same fixture through every path a task can take: escalation on
+oscillation, on exhausted driver runs, on wall clock with suspended time excluded, and on
+infrastructure failure; suspend mid-task and resume to completion; rejection for budgets over
+ceilings, for a workflow cycle, and for a second authored Action; injection of the required gate
+over a workflow that authored the same class; a task blocked on a missing class and admitted
+the moment it appears; the namespace retained on failure and reaped after retention; and full
+teardown on deletion.
+
+## The executor script
+
+The fake executor reads its results from a ConfigMap keyed by step name and attempt. Delay is
+modelled as a deadline observed by polling, never a sleep. It is also how you can script a
+failure to see the loop remediate it:
+
+```yaml title="fake-executor-script (excerpt)"
+data:
+  script.yaml: |
+    initialSnapshot: h0
+    steps:
+      - stepName: implement
+        attempt: 1
+        result: Passed
+        resultSnapshot: h1
+        changedPaths: ["src/export.py", "tests/test_export.py"]
+      - stepName: lint
+        attempt: 1
+        result: Failed
+        evidence: "E501 line too long: src/export.py:41"
+      - stepName: lint@fix
+        attempt: 1
+        result: Passed
+        resultSnapshot: h2
+        changedPaths: ["src/export.py"]
+```

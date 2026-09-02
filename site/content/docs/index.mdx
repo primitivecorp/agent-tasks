@@ -1,0 +1,93 @@
+---
+title: "Overview"
+description: "agent-tasks is a Kubernetes operator and five custom resources that take a ticket from opened to closed by running a coding agent inside a verification loop your cluster controls."
+---
+
+<Callout title="Pre-release" type="warn">
+  agent-tasks is being built from a public specification. These pages document the system as
+  specified: the Phase 1 resources and behaviour the first release implements, and the Phase 2
+  mechanics designed for it. Commands and manifests are written as they will work in that
+  release. See [Status and roadmap](/docs/roadmap) for what exists today.
+</Callout>
+
+## The problem
+
+Two of the three pieces already exist.
+
+- **Tasks exist.** The work is written down in Linear, Jira, GitHub Issues, a backlog.
+- **Sandboxes exist.** There are isolated environments where a coding agent can edit and run code
+  without putting anything else at risk.
+- **Orchestration doesn't.** Nothing runs the work between them. So a person does: reads the
+  ticket, starts an agent, watches it, reruns the checks, opens the pull request, chases the
+  review, verifies the deploy, closes the ticket. One agent at a time.
+
+Managing agents by hand does not scale, and it hides the real requirement. To trust an agent
+with a change you have to let it iterate on its own: edit the code, run the checks, fix what
+failed, and prove the result. What is missing is a system that runs that loop, bounds it, and
+makes the result checkable.
+
+## What agent-tasks is
+
+An operator and five custom resources in the API group `agents.primitive.dev/v1alpha1`.
+
+| Kind                 | Scope     | Written by               | What it is                                                                                                                            |
+| -------------------- | --------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentStepClass`     | cluster   | platform administrators  | A capability: an **Action** that changes the code (the agent, a formatter) or a **Gate** that judges a version of it (lint, tests). Image, command, timeout, budgets. |
+| `AgentClusterPolicy` | cluster   | platform administrators  | Cluster-wide constraints: which classes may be used, which gates every task must pass, budget ceilings, and the template for each task's namespace. Exactly one, named `default`. |
+| `AgentWorkflow`      | namespace | teams                    | Composition: which steps run, in what order, and what change invalidates each verdict. It carries no behaviour of its own.            |
+| `AgentTask`          | namespace | people, later connectors | One ticket's intent: the goal and the workflow to run. Its status is the live state of the loop.                                      |
+| `AgentStep`          | namespace | the operator             | One bounded execution: an agent turn or a gate run, with its result. Immutable once created.                                          |
+
+## How a task runs
+
+1. A ticket becomes an `AgentTask` in a team namespace, by hand today and through a
+   [connector](/docs/connectors) later.
+2. The operator **admits** it: it resolves the workflow, the policy and every step class into a
+   complete plan, injects the gates the policy requires, checks budgets against ceilings, and
+   pins the plan into the task's status. Nothing edited afterwards can change a running task.
+3. It **provisions** a work namespace for the task, with the quota and network policies the
+   policy names. Everything derived from the agent's workspace lives there.
+4. It **loops**. Each round it decides the single next thing to run, creates an `AgentStep` for
+   it, and waits for the result. The agent runs once, then the gates run against the exact
+   version of the code it produced. A failing gate sends its evidence back to the agent, or to a
+   fixer first if the gate names one, and the gates run again against the new version.
+5. It **stops**. When every required gate has passed against the current version, the task is
+   validated, its namespace is released, and it succeeds. If a budget runs out, or the agent
+   loops back to a version it already produced, the task fails with a stated reason and its
+   namespace is kept for a post-mortem.
+
+Every verdict is tied to the version of the code it judged, so a gate that passed earlier never
+counts for code that changed since. That is the [convergence model](/docs/concepts/model), and
+it is what makes letting the agent iterate reasonable.
+
+## Why Kubernetes resources
+
+Because it puts agent work where the rest of your platform already is.
+
+- The queue of agent work is `kubectl get agenttasks`, with RBAC deciding who can file one and
+  who can change the checks.
+- Required checks are cluster policy applied to every task at admission, not a convention a
+  workflow can drop.
+- Isolation is a namespace per task, with network policy and quota, which is also the foundation
+  for per-pod networking when real sandboxes run in it.
+- The operator is a reconciler over status, so crashes replay and nothing is lost: an execution
+  is created at most once, and a result is folded exactly once.
+- Everything is declarative, so workflows and classes live in git and roll out like any other
+  manifest.
+
+## Where to go next
+
+<Cards>
+  <Card title="Install" href="/docs/install">
+    Requirements, the operator, and the one policy object a cluster needs before any task runs.
+  </Card>
+  <Card title="Your first task" href="/docs/first-task">
+    Define step classes and a workflow, create a task, and watch it converge.
+  </Card>
+  <Card title="Concepts" href="/docs/concepts/model">
+    Snapshots, Actions and Gates, the ledger, and why the loop always terminates.
+  </Card>
+  <Card title="Connectors" href="/docs/connectors">
+    Create tasks from Linear or GitHub Issues, and let tasks merge, deploy and verify.
+  </Card>
+</Cards>

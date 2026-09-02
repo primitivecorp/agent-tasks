@@ -1,0 +1,58 @@
+---
+title: "Beyond the sandbox"
+description: "How a workflow carries a change past the sandbox in Phase 2, without the operator learning what a merge queue or a deployment is."
+---
+
+<Callout title="Phase 2" type="info">
+  Everything on this page is designed and specified but lands after the first release.
+</Callout>
+
+## Four mechanisms
+
+The first release has one trigger, a finished `AgentStep`, and one Action, the agent. Phase 2
+adds four generic things and nothing merge-, deploy- or release-specific:
+
+- **Observations.** Facts from outside the sandbox become a second input to the loop: a
+  deployment landed or was rolled back, the base branch advanced, a review or approval arrived,
+  a step was performed by hand, the ticket changed. Connectors write them as
+  `AgentObservation` objects; the operator folds them like step results.
+- **Connectors.** Components outside the operator that sense those facts and perform the
+  actions that need credentials. The sandbox never holds a credential. See
+  [Connectors](/docs/connectors).
+- **Gate scopes and readiness.** Gates may judge a diff, so a verdict is cleared when the base
+  branch moves; an environment, so a verdict is about the deployment that contains the
+  snapshot and the gate waits until that deployment exists; or be **observed**, so the verdict
+  comes from an external judge such as a reviewer, a canary analysis or a merge queue. A
+  waiting gate pauses the wall clock and is bounded by `maxWait`.
+- **Action triggers.** Workflows may have several Actions, ordered in a chain. Each runs when
+  its prerequisites hold at the current snapshot and has no completion there yet. After a
+  production failure sends the agent back and produces a new version, the pull request, merge,
+  release and close steps all run again for it. Every shipped snapshot walks the same steps.
+
+## Nothing the team's tooling does moves into the operator
+
+How a team merges, deploys, verifies and releases differs per team. Whether it uses a merge
+queue that batches speculatively, a canary analysis, a flag service, or a single lane, each is
+a connector plugged into the workflow as an Action or a Gate. The operator guarantees
+provenance and per-snapshot validity: it records which source said what about which version,
+and a stale approval never passes a newer version. Whether the team's canary analysis blames the
+right change is the team's tooling, exactly as it is for the team's people today.
+
+See [merge, deploy and release](/docs/connectors/merge-deploy-release) for four teams'
+workflows composed from the same kinds.
+
+## A person is a gate, not an owner
+
+An approval or a review is a verdict about one exact snapshot, produced by a person instead of
+a program, and invalidated like every other verdict. Teams place approval gates where they want
+them. Administrators can require one before any Action class through the policy's
+`approvalGates`, injected like required gates and equally unremovable. Where nobody asked for a
+person, nothing waits.
+
+## Tasks that create tasks
+
+Tracker connectors turn matching tickets into tasks. Schedules create tasks on a cron. A
+scanner task can file tickets through the tracker connector, which admits them as new tasks
+under the target namespace's policy. The agent never creates `AgentTask` or
+`AgentObservation` objects; provenance labels, a spawn-depth cap and per-source rate caps keep
+this from running away.

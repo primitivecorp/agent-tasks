@@ -1,0 +1,67 @@
+---
+title: "Status and roadmap"
+description: "What exists today, what the first release contains, and what follows it."
+---
+
+## Today
+
+The project is a public specification, a whitepaper, and this site. The
+[specification](https://github.com/primitivecorp/agent-tasks/blob/main/implementation.md)
+defines the resources, the controllers, the pure convergence core and its test matrix, and
+the Phase 2 mechanics. Implementation follows the build order below; nothing on this site
+describes behaviour the specification does not pin down.
+
+## Phase 1: the coding loop
+
+The first release answers one question: does the convergence core terminate and hold its
+invariants when an agent iterates against gates? It ships:
+
+- The five resources with full schemas, validation rules and print columns.
+- The gate-state view and the pure `Fold` and `Decide` functions, with the test matrix that
+  asserts a computable termination bound.
+- The `AgentTask` and `AgentStep` controllers.
+- The executor interface and a **fake executor** that replays scripted results, so the whole
+  loop can be exercised end to end without a real sandbox.
+- Work-namespace lifecycle: creation, network policy and quota materialisation, release on
+  success, retention on failure, teardown on deletion.
+
+Deliberately not in Phase 1: real executors, tracker connectors, merge and deploy steps,
+multi-candidate execution, parallel gates, a durable evidence store, a read API and a UI. Each
+is reserved with its semantics in the specification's appendix so later phases do not have to
+rediscover them.
+
+### Build order
+
+1. **The pure core.** `Fold`, `Decide`, invalidation and lineage as plain Go with table-driven,
+   property and fuzz tests. No Kubernetes imports.
+2. **Types.** The five kinds, defaults, validation rules, generated manifests.
+3. **Plan resolution and admission.** Class resolution, injection of required gates, ceilings,
+   pinning, watch-driven retry.
+4. **Controllers with the fake executor.** Single-flight, deterministic step names, crash
+   replay, suspend and resume, namespace lifecycle.
+5. **Acceptance.** The reference task converges under the fake executor; every escalation path
+   is exercised.
+
+## Phase 2: beyond the sandbox
+
+The mechanics that let a workflow carry a change past the sandbox, designed in the
+specification's section 12 and documented under [Connectors](/docs/connectors):
+
+- **Observations** as a second input to the loop: a deployment landed, the base branch moved, a
+  review or approval arrived, a step was performed by hand, the ticket changed.
+- **Connectors** outside the operator that sense those facts and perform the actions that need
+  credentials: open a pull request, merge, cut a release, file or close a ticket.
+- **Environment and observed gates**: verdicts about a deployed system or from an external
+  judge, with readiness and bounded waiting.
+- **Action triggers** for workflows with more than one Action, so merge, release and close run
+  again for every new version of the change.
+- **Task sources**: tracker connectors and schedules that create tasks under policy.
+
+Real executors (`SandboxExec`, `Job`, `Http`), the git broker that keeps credentials out of the
+sandbox, and the provenance admission policy for sandbox pods arrive alongside.
+
+## Following along
+
+Development happens in the open at
+[github.com/primitivecorp/agent-tasks](https://github.com/primitivecorp/agent-tasks). The
+specification's change log records every decision and the review that produced it.

@@ -1,0 +1,155 @@
+---
+title: "API reference"
+description: "Fields, validation rules and print columns for the five kinds in agents.primitive.dev/v1alpha1."
+---
+
+Group `agents.primitive.dev`, version `v1alpha1`. Structure, enums and immutability are
+validated on the schemas; cross-object checks happen at admission and are pinned.
+
+## AgentStepClass
+
+Cluster-scoped.
+
+| Field              | Type                        | Notes                                                                                   |
+| ------------------ | --------------------------- | --------------------------------------------------------------------------------------- |
+| `spec.kind`        | `Action` \| `Gate`          | Immutable.                                                                              |
+| `spec.executor`    | string                      | `Fake` in the first release; `SandboxExec`, `Job`, `Http`, `Observed` reserved.         |
+| `spec.image`       | string                      | Digest-pinned into the plan when resolvable.                                            |
+| `spec.command`, `spec.args` | []string           |                                                                                         |
+| `spec.timeout`     | duration                    |                                                                                         |
+| `spec.blocking`    | bool                        | Gates only. Default `true`.                                                             |
+| `spec.fixAction`   | string                      | Gates only. An Action class name; the plan synthesizes `<gate>@fix` from it.            |
+| `spec.evidence.format` | `junit` \| `sarif` \| `json` \| `text` | Gates only.                                                                  |
+| `spec.turnBudget`  | int                         | Actions only. Per invocation, enforced by the executor.                                 |
+| `spec.tokenBudget` | int64                       | Actions only. Per invocation.                                                           |
+
+Reserved: `scope` (`Tree` \| `Diff` \| `Environment`), `cost` (`Cheap` \| `Expensive`),
+`externallySatisfiable`, `environment`, `source`, `policyGate`.
+
+Validation: gate-only fields absent when `kind: Action`, action-only fields absent when
+`kind: Gate`. Checked at admission: `fixAction` names an existing `Action` class.
+
+## AgentClusterPolicy
+
+Cluster-scoped, singleton named `default`.
+
+| Field                                   | Type                | Notes                                                                          |
+| --------------------------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| `spec.allowedClasses`                   | []string            | `["*"]` allows all.                                                            |
+| `spec.requiredGates[].name`             | string              | Injected identity is `<name>@policy`.                                          |
+| `spec.requiredGates[].class`            | string              | A concrete Gate class.                                                         |
+| `spec.ceilings.tokens`                  | int64               |                                                                                |
+| `spec.ceilings.wallClock`               | duration            | Active runtime.                                                                |
+| `spec.ceilings.maxDriverRuns`           | int                 |                                                                                |
+| `spec.ceilings.fixAttemptsPerGate`      | int                 |                                                                                |
+| `spec.ceilings.infraRetries`            | int                 | Consecutive.                                                                   |
+| `spec.workNamespace.resourceQuota`      | ResourceQuotaSpec   |                                                                                |
+| `spec.workNamespace.limitRange`         | LimitRangeSpec      |                                                                                |
+| `spec.workNamespace.networkPolicies`    | []string            | From the built-in library: `default-deny-ingress`, `default-deny-egress`, `allow-dns`. |
+| `spec.workNamespace.runtimeClasses`     | []string            | Permitted isolation tiers.                                                     |
+| `spec.workNamespace.retainOnFailure`    | duration            | Default 24h.                                                                   |
+
+Phase 2: `spec.allowedObservationSources`, `spec.approvalGates[]` (`before`, `source`), spawn
+depth and per-source rate caps.
+
+## AgentWorkflow
+
+Namespaced.
+
+| Field                              | Type     | Notes                                                                 |
+| ---------------------------------- | -------- | --------------------------------------------------------------------- |
+| `spec.driver`                      | string   | The one Action step.                                                  |
+| `spec.workspace.repo`              | string   |                                                                       |
+| `spec.workspace.baseRef`           | string   |                                                                       |
+| `spec.workspace.sparseCheckout`    | []string |                                                                       |
+| `spec.budgets`                     | Budgets  | Same fields as ceilings; must not exceed them.                        |
+| `spec.steps[].name`                | string   | Unique; DNS-1123 label, so `@` cannot appear.                         |
+| `spec.steps[].class`               | string   |                                                                       |
+| `spec.steps[].after`               | []string | Must form a DAG.                                                      |
+| `spec.steps[].invalidatedBy`       | []string | Gates only. Default `["**"]`.                                         |
+
+Phase 2 step fields: `environment`, `maxWait`.
+
+Validation: step names unique, `driver` non-empty, `spec` immutable. Checked at admission:
+classes exist and are allowed, kinds match, exactly one Action named by `driver`,
+`invalidatedBy` only on gates, `after` acyclic, budgets at or below ceilings.
+
+## AgentTask
+
+Namespaced.
+
+| Field                            | Type                | Notes                                        |
+| -------------------------------- | ------------------- | -------------------------------------------- |
+| `spec.goal.title`                | string              |                                              |
+| `spec.goal.body`                 | string              |                                              |
+| `spec.goal.acceptanceCriteria`   | []string            |                                              |
+| `spec.workflowRef.name`          | string              | Required.                                    |
+| `spec.suspend`                   | bool                | The only mutable spec field.                 |
+
+Status, written by the operator only:
+
+| Field                    | Notes                                                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `observedGeneration`     |                                                                                                             |
+| `phase`                  | Display only.                                                                                               |
+| `conditions[]`           | `Admitted`, `Provisioned`, `Suspended`, `Validated`, `Succeeded`, `Failed`; Phase 2 `Canceled`.             |
+| `resolvedPlan`           | Workflow, policy, driver, budgets, every step resolved by content, injected gates, `planHash`. Set once; frozen by a transition rule. |
+| `workNamespace`          | `at-<taskUID[:12]>`.                                                                                        |
+| `view`                   | Current snapshot, lineage, per-gate and per-action state, counters, spend.                                  |
+| `activeExecution`        | Name of the single in-flight `AgentStep`, or empty.                                                         |
+
+Print columns: `NAME WORKFLOW PHASE SNAPSHOT DRIVER TOKENS AGE`.
+
+### The view
+
+| Field                                  | Notes                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `currentSnapshot`                      |                                                                                             |
+| `lineage[]`                            | `snapshot`, `parent`, `filesChanged`, `linesChanged`, a sample of paths, `pathCount`.       |
+| `oscillation`                          | Sticky once set.                                                                            |
+| `gates.<step>.result`                  | `Unknown` \| `Passed` \| `Failed` \| `Errored`; Phase 2 `Waiting`.                          |
+| `gates.<step>.verifiedSnapshot`        | The snapshot the result is valid for.                                                       |
+| `gates.<step>.evidence`, `evidenceRef` | Inline excerpt capped at 4 KiB, plus a reference.                                            |
+| `gates.<step>.fixAttempts`, `fixAttemptedAt` | Lifetime count; input snapshot of the last attempt.                                   |
+| `gates.<step>.infraRetries`            | Consecutive; reset by a success of this step.                                               |
+| `gates.<step>.executionAttempt`        | Completed executions; the next step name derives from it.                                   |
+| `actions.<step>.completions`, `lastSnapshot`, `infraRetries`, `executionAttempt` | For the driver and every `<gate>@fix`.               |
+| `driverRuns`                           |                                                                                             |
+| `spend.tokens`, `spend.activeRuntime`  | Active runtime accrues from `Provisioned` and pauses while `Suspended`.                     |
+
+## AgentStep
+
+Namespaced, created by the operator, frozen after creation.
+
+| Field                                 | Notes                                                                             |
+| ------------------------------------- | --------------------------------------------------------------------------------- |
+| `spec.taskRef`, `spec.taskUID`        |                                                                                   |
+| `spec.stepName`, `spec.kind`          | Plan step or `<gate>@fix`.                                                        |
+| `spec.trigger`                        | `Initial` \| `GateFailure` \| `FixAction`; Phase 2 `Ready`.                       |
+| `spec.failures[]`                     | `gate`, `evidenceRef`, capped `evidence`. At most one entry in the first release. |
+| `spec.inputSnapshot`, `spec.executionAttempt` |                                                                           |
+| `spec.executor`, `image`, `command`, `args`, `timeout`, `evidence` | Copied verbatim from the plan.                       |
+| `spec.goal`                           | Driver runs only.                                                                 |
+| `spec.workNamespace`                  | Where executors place workloads.                                                  |
+| `spec.ttlSecondsAfterFinished`        | Default 3600; reaped by the operator after the task has folded the step.          |
+
+Status: `phase` (`Pending` \| `Running` \| `Succeeded` \| `Failed` \| `Errored`), `result` for
+gates, `exitReason` (`Clean` \| `TurnBudget` \| `Timeout` \| `Error` \| `Canceled`; Phase 2
+`Preempted`, `GateMutation`), `resultSnapshot`, `changedPaths` (capped at 2048, with
+`changedPathsTruncated` and `changedPathCount`), `evidenceRef`, `evidence`, `turnsUsed`,
+`tokensIn`, `tokensOut`, `startedAt`, `endedAt`.
+
+### Naming
+
+```text
+name = trunc(taskName, 24) + "-" + trunc(stepName, 12) + "-" +
+       sha256(taskUID + "/" + stepName + "/" + inputSnapshot + "/" + executionAttempt)[:10]
+```
+
+The readable step segment has `@` replaced by `-`; identity lives in the hash, whose input uses
+the unsanitized name, so `lint@fix` and a step named `lint-fix` cannot collide.
+
+## Phase 2: AgentObservation
+
+Namespaced, created by connectors, owned by a task. `spec.taskRef`, `spec.observation` (see
+[Connectors](/docs/connectors)); status `folded`, `error`. Frozen after creation.

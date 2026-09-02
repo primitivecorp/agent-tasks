@@ -1,0 +1,59 @@
+---
+title: "Security model"
+description: "The invariants the operator enforces in code, validation rules and RBAC, and who may write what."
+---
+
+The invariants below are enforced, not conventions. Where the first release has no real
+executors, every invariant that can hold now holds now.
+
+## Invariants
+
+1. **Behaviour lives on classes; workflows compose.** A workflow step has no behavioural fields:
+   `kind`, `blocking`, `fixAction` and budgets are class-side. The fields cannot exist
+   server-side, so there is nothing to reject.
+2. **Resolution happens once, at admission, and pins everything.** The workflow, the policy and
+   every class are resolved by content into the task's plan. Later edits cannot alter a running
+   task's gate set, images, commands, ceilings or budgets. Set-once is enforced by a transition
+   rule on the status field.
+3. **Required gates are injected at plan resolution: always, never authored, never
+   suppressed.** The injected copy owns a reserved identity, is always blocking, and is always
+   invalidated by any change. An authored step of the same class never stands in for it.
+4. **Budgets are rejected, not clamped.**
+5. **No policy admits nothing.**
+6. **Invalidation defaults closed.** Globs default to everything; a truncated change report
+   over-invalidates.
+7. **The agent never writes spec.** All agent influence enters through step results and
+   evidence. Task spec is frozen except `suspend`; status subresources are writable only by the
+   operator's service account.
+8. **Workflow selection never reads free text.** The first release uses an explicit
+   `workflowRef`. When tracker-driven selection arrives it resolves from trusted structured
+   fields only, because ticket bodies and comments are writable by anyone with issue access,
+   including the agent.
+9. **Evidence is not trusted from the workspace.** Executors produce evidence from tool output
+   and copy it out; a path inside the agent-writable workspace is never the source of record.
+   Gates run against read-only mounts, with a snapshot-echo check as the backstop.
+10. **Provenance placement.** A `ValidatingAdmissionPolicy` will require any pod whose image
+    matches `sandbox/*` to set a `kata-*` runtime class and live in a work namespace. It lands
+    with the real executor; the namespace shape it depends on is set now.
+
+## Phase 2 additions
+
+- **Connectors hold credentials; the sandbox never does.** Merging, releasing, filing and
+  closing tickets are actions performed by connectors with their own scoped credentials.
+- **Observations are validated, sequenced and source-allowlisted.** Only connectors named in
+  the policy may speak, every observation is checked against the plan, and a replayed sequence
+  number is rejected.
+- **The agent cannot create tasks or observations.** Tasks are created by connectors under
+  policy, with provenance labels, a spawn-depth cap and per-source rate caps.
+- **A stale approval is inert.** A verdict never applies to a snapshot it did not name.
+
+## RBAC
+
+| Role          | `AgentStepClass`, `AgentClusterPolicy` | `AgentWorkflow` | `AgentTask`       | `AgentStep` | Statuses    |
+| ------------- | -------------------------------------- | --------------- | ----------------- | ----------- | ----------- |
+| Cluster admin | write                                  |                 |                   |             |             |
+| Team          | read                                   | write           | write             | read        |             |
+| Operator SA   | read                                   | read            | read + finalizers | write       | sole writer |
+
+The operator additionally holds create and delete on `Namespace`, `ResourceQuota`,
+`LimitRange` and `NetworkPolicy` for work-namespace lifecycle.

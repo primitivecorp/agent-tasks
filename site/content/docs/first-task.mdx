@@ -1,0 +1,207 @@
+---
+title: "Your first task"
+description: "Define step classes and a workflow, file a task, and follow it from admission to a verified result."
+---
+
+This walkthrough uses the reference example from the specification: a Python repository, a
+coding agent, a linter with an autofix, a test suite, and the integrity gate the cluster
+policy requires. It assumes the operator is [installed](/docs/install) and the
+[cluster policy](/docs/install/policy) exists.
+
+<Steps>
+<Step>
+
+### Define the step classes
+
+Classes are cluster-scoped and written by an administrator. Three are enough for a loop: the
+agent, a lint gate with its fix action, and a test gate.
+
+```yaml title="classes.yaml"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: coding-agent
+spec:
+  kind: Action
+  executor: Fake
+  image: sandbox/agent:v1
+  timeout: 15m
+  turnBudget: 40
+  tokenBudget: 200000
+---
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: lint-python
+spec:
+  kind: Gate
+  executor: Fake
+  image: sandbox/toolchain-python:v1
+  command: ["ruff", "check", "--output-format=json"]
+  timeout: 2m
+  blocking: true
+  fixAction: lint-python-fix
+  evidence:
+    format: json
+---
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: lint-python-fix
+spec:
+  kind: Action
+  executor: Fake
+  image: sandbox/toolchain-python:v1
+  command: ["ruff", "check", "--fix"]
+  timeout: 2m
+---
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentStepClass
+metadata:
+  name: test-pytest
+spec:
+  kind: Gate
+  executor: Fake
+  image: sandbox/toolchain-python:v1
+  command: ["pytest", "-q", "--junitxml=/evidence/junit.xml"]
+  timeout: 10m
+  evidence:
+    format: junit
+```
+
+```bash
+kubectl apply -f classes.yaml
+```
+
+The policy's required gate, `integrity-check`, is a class too, created with the policy.
+
+</Step>
+<Step>
+
+### Compose a workflow
+
+Workflows are namespaced and written by the team. This one names the agent as the driver and
+orders the gates cheapest first.
+
+```yaml title="workflow.yaml"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentWorkflow
+metadata:
+  name: python-minimal
+  namespace: agent-tasks-platform
+spec:
+  driver: implement
+  workspace:
+    repo: git@github.com:primitivecorp/example
+    baseRef: main
+  budgets:
+    tokens: 400000
+    wallClock: 20m
+    maxDriverRuns: 5
+  steps:
+    - name: implement
+      class: coding-agent
+    - name: lint
+      class: lint-python
+      after: [implement]
+      invalidatedBy: ["**/*.py"]
+    - name: unit
+      class: test-pytest
+      after: [lint]
+```
+
+```bash
+kubectl apply -f workflow.yaml
+```
+
+`unit` declares no `invalidatedBy`, so any change re-runs the tests. That is the safe default.
+
+</Step>
+<Step>
+
+### File a task
+
+```yaml title="task.yaml"
+apiVersion: agents.primitive.dev/v1alpha1
+kind: AgentTask
+metadata:
+  name: fix-csv-export
+  namespace: agent-tasks-platform
+spec:
+  goal:
+    title: "CSV export drops the trailing row"
+    body: |
+      Reproduce with tests/fixtures/small.csv.
+    acceptanceCriteria:
+      - "New test covering the off-by-one"
+      - "Existing export tests still pass"
+  workflowRef:
+    name: python-minimal
+```
+
+```bash
+kubectl apply -f task.yaml
+kubectl get agenttasks -n agent-tasks-platform -w
+```
+
+</Step>
+<Step>
+
+### Watch it converge
+
+```text
+NAME             WORKFLOW         PHASE       SNAPSHOT  DRIVER  TOKENS  AGE
+fix-csv-export   python-minimal   Admitted    h0        0/5     0       2s
+fix-csv-export   python-minimal   Running     h1        1/5     38120   21s
+fix-csv-export   python-minimal   Running     h2        1/5     38120   34s
+fix-csv-export   python-minimal   Running     h3        2/5     61204   58s
+fix-csv-export   python-minimal   Validated   h3        2/5     61204   81s
+fix-csv-export   python-minimal   Succeeded   h3        2/5     61204   94s
+```
+
+</Step>
+</Steps>
+
+## What happened
+
+The operator's trace for this task, as the specification pins it:
+
+1. **Admission.** The policy, the workflow and every class are resolved. `lint@fix` is
+   synthesized from `lint-python`'s fix action. `integrity@policy` is injected after every
+   step, blocking, invalidated by any change. The plan is pinned.
+2. **Provisioning.** The work namespace `at-3f9c01d2a7b4` is created with the policy's quota
+   and network policies. The view is initialised at `h0`.
+3. **Driver, run 1.** The agent runs and produces `h1`, changing `src/export.py` and
+   `tests/test_export.py`. Every gate is `Unknown` for `h1`.
+4. **Lint fails at `h1`** with `E501 line too long`. The gate names a fix action, so the fix
+   runs first: `lint@fix` produces `h2`, changing `src/export.py`. `lint` is cleared, because
+   its globs match; `unit` was `Unknown` anyway.
+5. **Lint passes at `h2`. Unit fails at `h2`** on the trailing-row assertion. `unit` has no fix
+   action, so the driver runs again with the failure as evidence.
+6. **Driver, run 2.** The agent produces `h3`. Every gate is cleared: `lint` because a Python
+   file changed, `unit` and `integrity@policy` because anything changed.
+7. **All three gates pass at `h3`.** The driver has run and every blocking gate is `Passed` at
+   the current snapshot: `Validated`.
+8. **Cleanup.** The operator requests deletion of the work namespace and waits until it is
+   gone. `Succeeded`.
+
+Two agent runs, one fix, nine executions. The same task with a different scripted outcome,
+say an agent that keeps producing `h1` again, ends with `Failed` and the reason
+`oscillation`, and its namespace is kept for a day.
+
+## Read the result
+
+```bash
+kubectl get agenttask fix-csv-export -n agent-tasks-platform -o yaml
+```
+
+Under `status.view.gates`, each gate shows `result: Passed` and `verifiedSnapshot: h3`. Under
+`status.view.actions`, `implement` shows two completions and `lint@fix` one. The `AgentStep`
+objects, until their TTL reaps them, carry every execution's inputs, result, evidence and
+spend.
+
+## Next
+
+- [Authoring step classes](/docs/guides/step-classes) for the gates your loop should have.
+- [Authoring workflows](/docs/guides/workflows) for ordering, invalidation and budgets.
+- [Creating and reading tasks](/docs/guides/tasks) for following tasks and acting on failures.

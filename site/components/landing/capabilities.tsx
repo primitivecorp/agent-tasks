@@ -109,15 +109,14 @@ export function Capabilities() {
   return (
     <section aria-labelledby="cap" className="mb-14 grid gap-5">
       <h2 id="cap" className={h2}>
-        Everything you used to do by hand is a step a task can run
+        Every stage of a change is a step a task can run
       </h2>
       <p className="max-w-[72ch] text-[1.02rem]">
-        A task is a workflow. Every stage below is a step it can perform itself — and every step is
-        one of two kinds: it either <strong className="font-semibold">does</strong>{" "}
-        something to the code, or it{" "}
-        <strong className="font-semibold">checks</strong> a version of it and returns
-        a verdict. This lifecycle is one example. Yours can add steps, drop steps, or put a person
-        in the middle of one;{" "}
+        A task is a workflow, and every stage below is a step it can perform itself. Each step is one
+        of two kinds: it either <strong className="font-semibold">does</strong> something to the
+        code, or it <strong className="font-semibold">checks</strong> a version of it and returns a
+        verdict. This lifecycle is one example. Yours can add steps, drop steps, or put a person in
+        the middle of one;{" "}
         <a href="#teams" className="underline underline-offset-4 decoration-border hover:decoration-current">
           four teams’ versions are below
         </a>
@@ -142,12 +141,12 @@ export function Capabilities() {
         ))}
       </div>
       <p className="max-w-[72ch] text-[1.02rem] leading-[1.5]">
-        <strong className="font-heading font-bold">Humans where you want them, not where you’re stuck
-        with them.</strong>{" "}
+        <strong className="font-heading font-bold">People are gates, not owners.</strong>{" "}
         <span>
           None of these steps waits on a person by default. A team places human gates where it wants
-          them — an approval before merge, a sign-off before release, an intent check on staging —
-          and removes them as the automated gates earn trust. That’s a dial, not a boundary.
+          them, an approval before merge, a sign-off before release, an intent check on staging, and
+          removes them as the automated gates earn trust. An approval is a verdict about one exact
+          version, and it expires like any other verdict when the code changes.
         </span>
       </p>
     </section>

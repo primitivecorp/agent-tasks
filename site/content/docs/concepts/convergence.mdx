@@ -1,0 +1,92 @@
+---
+title: "Convergence and termination"
+description: "How the operator decides what runs next, how fixes and budgets interact, and why every task ends with a stated reason."
+---
+
+## What Decide returns
+
+Given the pinned plan, the current view and the budgets, `Decide` returns exactly one of:
+
+- **Run an Action.** The driver, on its first run or after a blocking gate failed, or a gate's
+  fix action.
+- **Run a Gate.** The first gate in plan order whose verdict is `Unknown` at the current
+  snapshot.
+- **Escalate**, with a reason. The task fails.
+- **Done.** Every blocking gate is `Passed` at the current snapshot and the driver has run.
+
+Phase 2 adds **Wait**: nothing is runnable because a gate is waiting on the world, for a
+deployment to land or a review to arrive.
+
+## The walk
+
+Steps are visited in plan order, which encodes cost: a workflow puts cheap gates first so a
+failing lint run short-circuits before the test suite starts. For each gate:
+
+- `Unknown` runs it.
+- `Passed` continues.
+- `Failed` on a non-blocking gate is recorded and continues.
+- `Failed` on a blocking gate remediates: the gate's **fix action first**, if the class names
+  one and the fix has not already been tried at this snapshot and its attempts are not
+  exhausted; otherwise the **driver**, carrying the gate's evidence, if driver runs remain;
+  otherwise escalate.
+
+The driver is the only step that runs because something failed. Everything else runs because
+its verdict is missing.
+
+## Fix actions
+
+A gate whose class names a `fixAction` gets a synthesized Action, `<gate>@fix`, that runs
+before an agent turn is spent: a formatter fixes formatting, a linter's autofix fixes lint. A
+fix runs at most once per gate per snapshot. A fix that changes nothing counts as attempted and
+the gate proceeds to the driver. A fix that cannot run for infrastructure reasons is skipped
+and the gate degrades to the driver, because a broken fixer must not kill a task that has a
+defined fallback.
+
+## Budgets
+
+| Budget               | What it bounds                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `maxDriverRuns`      | Total agent invocations, the first included.                                                                               |
+| `fixAttemptsPerGate` | Fix runs per gate over the task's life.                                                                                    |
+| `infraRetries`       | Consecutive infrastructure failures of one step. A success resets the count; a snapshot change alone does not.             |
+| `tokens`             | Tokens across all agent runs.                                                                                              |
+| `wallClock`          | Active runtime, from provisioning, paused while suspended and, in Phase 2, while waiting on the world.                     |
+
+Budgets guard remediation, not verification: the last budgeted fix or driver run is always
+followed by the gates it needs. A gate left `Unknown` by the final run is re-run, never
+escalated past.
+
+## Termination
+
+Every task ends. Five reasons end it early:
+
+| Reason         | Trigger                                                                                                                                        |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `oscillation`  | An Action produced a snapshot the task has already occupied, other than the current one. The agent is going in circles.                        |
+| `driver-runs`  | A blocking gate is failed and the agent has no runs left.                                                                                      |
+| `wall-clock`   | Active runtime exceeded the budget.                                                                                                            |
+| `token-budget` | Token spend exceeded the budget.                                                                                                               |
+| `infra`        | The driver or a blocking gate failed for infrastructure reasons `infraRetries` times in a row.                                                 |
+
+A no-op Action, one that returns the current snapshot unchanged, is not oscillation. A
+non-blocking gate that cannot run is tolerated: it must not be able to block completion.
+
+The bound is computable, and the test suite asserts it. With `G` gates and `F` gates carrying
+a fix action:
+
+```text
+action completions  ≤ maxDriverRuns + F · fixAttemptsPerGate          =: A
+snapshots           ≤ A + 1
+gate completions    ≤ G · (A + 1)
+total executions    ≤ (A + G · (A + 1)) · (infraRetries + 1) + a small constant
+```
+
+Every decision either terminates or schedules an execution that strictly consumes one of those
+bounded quantities. That is the termination argument.
+
+## Determinism
+
+`Fold` then `Decide` is deterministic: identical inputs give identical outputs, and the
+per-step execution counter advances exactly once per folded result. This is what lets the
+controller replay after a crash and lets the whole core be tested as plain functions before
+Kubernetes is involved.

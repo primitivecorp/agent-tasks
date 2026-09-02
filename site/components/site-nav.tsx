@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 const links = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Home" },
   { href: "/loop", label: "The loop, step by step" },
+  { href: "/docs", label: "Docs" },
 ];
 
 export function SiteNav() {
