@@ -1205,6 +1205,7 @@ config/rbac/                  roles per §6
 examples/stepclasses/         reusable class library (Action/Gate pairs)
 test/e2e/testdata/            acceptance fixtures
 paper/                        whitepaper sources
+site/                         project website (Next.js): the visual explainer, docs home
 ```
 
 ### Scaffolding

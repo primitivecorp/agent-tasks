@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/*
+ * Visual identity for the agent-tasks site.
+ * Cool graphite neutrals with a blue bias; one burnt-orange accent reserved for
+ * "happening right now"; a separate semantic trio for gate verdicts.
+ */
+:root {
+  --bg: #f2f4f7;
+  --surface: #ffffff;
+  --surface-2: #e9edf2;
+  --ink: #15202b;
+  --muted: #5c6b7a;
+  --line: #d5dce4;
+  --accent: #d9531e;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe9e0;
+  --pass: #1e8a5b;
+  --pass-bg: #e3f4eb;
+  --fail: #c23a31;
+  --fail-bg: #fae6e4;
+  --unk: #a7781b;
+  --unk-bg: #fbf1dc;
+  --code-bg: #eef1f5;
+  --focus: #1f5fd0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e141a;
+    --surface: #151d25;
+    --surface-2: #1c2731;
+    --ink: #e7edf2;
+    --muted: #8c9baa;
+    --line: #2b3846;
+    --accent: #f07a3f;
+    --accent-ink: #161616;
+    --accent-soft: #3a2417;
+    --pass: #4cc38a;
+    --pass-bg: #15302a;
+    --fail: #ef6b62;
+    --fail-bg: #3a2020;
+    --unk: #d8ae57;
+    --unk-bg: #332b18;
+    --code-bg: #1a232c;
+    --focus: #7fb0ff;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-pass: var(--pass);
+  --color-pass-bg: var(--pass-bg);
+  --color-fail: var(--fail);
+  --color-fail-bg: var(--fail-bg);
+  --color-unk: var(--unk);
+  --color-unk-bg: var(--unk-bg);
+  --color-code-bg: var(--code-bg);
+  --color-focus: var(--focus);
+  --font-display: var(--font-display), var(--font-body), system-ui, sans-serif;
+  --font-sans: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Inline code in prose. */
+.prose-code code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--code-bg);
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+}
+
+/* The "In system terms" disclosure: a plus/minus marker instead of the default triangle. */
+details.sys > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details.sys > summary::-webkit-details-marker {
+  display: none;
+}
+details.sys > summary::before {
+  content: "+ ";
+}
+details.sys[open] > summary::before {
+  content: "– ";
+}
