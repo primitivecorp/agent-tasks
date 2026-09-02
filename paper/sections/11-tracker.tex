@@ -2,7 +2,11 @@
 \label{sec:tracker}
 
 % 1-1.5 pages. STATUS: [spec] -- the connector phase. The core is built so
-% that nothing here has to touch it.
+% that nothing here has to touch it. The tracker is one connector of a general
+% sensor/actuator pattern (implementation.md section 12.3): merges,
+% deployments, reviews and approvals arrive the same way, as observations, and
+% tickets, pull requests and releases are acted on by Http actions whose
+% credential lives in the connector, never in the sandbox.
 
 \subsection{A provider-neutral status vocabulary}
 % status.conditions and the gate-state view (current snapshot, per-gate result

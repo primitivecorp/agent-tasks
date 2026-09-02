@@ -22,6 +22,11 @@
 % same gates run once more against the released system (smoke checks, health,
 % the behaviour the ticket named), and a failure there re-opens the loop with
 % the finding attached, exactly as a staging failure does.
+% Mechanically these are environment-scoped gates (implementation.md
+% section 12.4): keyed on (gate, environment, snapshot), runnable only once a
+% deployment containing the snapshot is observed, Waiting otherwise, bounded
+% by maxWait. Merge policy is an injected approval gate before the merge
+% action (section 12.5): Manual injects it, AutoOnGreen does not.
 
 \subsection{Compounding trust}
 % This loop is the mechanism by which the system becomes more trustworthy over

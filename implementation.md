@@ -6,10 +6,12 @@ Repository: `github.com/primitivecorp/agent-tasks`
 API group: `agents.primitive.dev/v1alpha1`
 License: Apache-2.0
 
-Revision v2.2. Supersedes the v1 specification. Appendix A maps every change
+Revision v2.3. Supersedes the v1 specification. Appendix A maps every change
 back to its rationale, including the post-review revisions. Appendix B
-reserves the concepts deliberately deferred out of Phase 1. The executable
-contract and test matrix for the pure core are §11.
+reserves the concepts deliberately deferred out of Phase 1; §12 designs the
+Phase 2 mechanics (observations, connectors, environment gates, action
+triggers, task sources) that make the whole lifecycle expressible. The
+executable contract and test matrix for the pure core are §11.
 
 ---
 
@@ -75,7 +77,10 @@ sampled audit, Kueue admission, catalog dependencies, the diff-size ratchet,
 diff-scoped gates, elicitation/questions, the `Retry` escalation policy, the
 Postgres projection, the read API, the web UI, real executors, and the git
 broker. None of these answers the Phase 1 question. Appendix B records the
-reserved semantics so later phases do not have to rediscover them.
+reserved semantics so later phases do not have to rediscover them, and §12
+designs the Phase 2 mechanics — observations, connectors, environment gates,
+action triggers, task sources — that carry a task through the whole
+lifecycle.
 
 ---
 
@@ -225,7 +230,8 @@ type Action struct {
 
 The controller is a thin shell around these two functions: it feeds completed
 `AgentStep` results into `Fold`, persists the view, calls `Decide`, and
-materializes the returned action. Single-flight is the controller's invariant,
+materializes the returned action. (Phase 2 adds observations as a second
+`Fold` input and generalizes the action rule; §12.) Single-flight is the controller's invariant,
 not `Decide`'s concern: `Decide` is only consulted when no execution is
 active.
 
@@ -404,8 +410,9 @@ type AgentStepClassSpec struct {
     TurnBudget  int   // per-invocation bound, enforced by the executor
     TokenBudget int64 // per-invocation bound, enforced by the executor
 
-    // Reserved, documented, unimplemented in Phase 1 (Appendix B):
-    // Scope: Tree | Diff   — diff-scoped gates key on (baseRev, snapshot)
+    // Reserved, documented, unimplemented in Phase 1 (Appendix B, §12):
+    // Scope: Tree | Diff | Environment — diff-scoped gates key on
+    //        (baseRev, snapshot); environment gates on the deployment (§12.4)
     // Cost:  Cheap | Expensive — feeds the expensive-runs budget
 }
 
@@ -606,9 +613,9 @@ creation (edit-by-replace; running tasks are pinned regardless).
 Controller-checked at plan resolution (§4): every class exists and is allowed
 by policy; **exactly one step is an Action, and `driver` names it** — a
 Phase 1 workflow is one driver plus gates; fix actions are synthesized, never
-authored, and multi-action workflows return only when a later phase defines
-their rerun semantics (an authored second Action would have defined-but-
-degenerate run-exactly-once semantics: a trap, not a feature); `invalidatedBy`
+authored, and multi-action workflows return with the runnability rule of
+§12.5 (an authored second Action in Phase 1 would have defined-but-degenerate
+run-exactly-once semantics: a trap, not a feature); `invalidatedBy`
 appears only on Gate steps; `after` references exist and form no cycle; step
 names are DNS-1123 labels — `@` cannot appear in an authored name, which is
 what makes the synthesized `@fix`/`@policy` identity space collision-proof;
@@ -1968,6 +1975,352 @@ enter the picture (§8, Steps 2–5).
 
 ---
 
+## 12. Beyond the coding loop: observations, connectors, environment gates, action triggers
+
+Status: **[spec]** — the Phase 2 contract. Phase 1 (§1–§11) delivers the
+coding loop and has exactly one trigger: a completed `AgentStep`. `Fold`
+consumes execution results and nothing else; `Decide` runs one authored
+Action, the driver, once and again on gate failure; `Done` is the driver
+having run and every blocking gate green at the current snapshot, after which
+the task cleans up (§3.4: "Phase 1 has no merge path"). Nothing outside the
+sandbox can be perceived — a merge, a deployment, a review, an approval, a
+ticket closure — and nothing but the agent can be made to act. Every stage
+the project describes beyond the sandbox (the site of §7: filing tickets,
+managing the pull request, merging, verifying on staging and in production,
+closing the ticket) is therefore inexpressible today, and Appendix B reserved
+those stages' names without their mechanics.
+
+This section supplies the mechanics. It adds no second orchestrator: the
+operator stays the only decider, connectors outside it sense and act, and the
+pure core grows one input type, two predicates and one decision. Every
+Phase 1 rule below is the special case of its Phase 2 generalization; nothing
+in §2–§11 is contradicted.
+
+### 12.1 The trigger model
+
+Everything that moves a task is one of three things:
+
+| Trigger | What it is | Produced by | Consumed by |
+|---|---|---|---|
+| Execution result | An `AgentStep` finished: an Action did work or a Gate returned a verdict (Phase 1) | Executors | `Fold` |
+| Observation | A fact about the world outside the sandbox: a deployment landed or was rolled back, a review or approval was given, a step was performed by hand, the ticket changed | Connectors acting as sensors | `FoldObservation` |
+| Time | Budgets, per-gate wait limits, schedules | The controller's clock; source connectors | `Decide`; task sources |
+
+`Decide(plan, view, budgets)` chooses the single next thing. Connectors never
+decide, executors never decide, and the agent never decides what runs next.
+The operator never observes an external system itself — it wakes on
+connector writes exactly as it wakes on step results (§12.3). This is the
+standard Kubernetes shape — sensors → status → reconcile → actuators — with
+one reconciler.
+
+Two consequences:
+
+- **Merging, releasing, filing or closing a ticket are not agent work.** They
+  are deterministic tool calls: Actions whose class `executor` is `Http`,
+  performed by an actuator that holds the credential. The sandbox never holds
+  one (the git-broker rule, Appendix B). The agent is one executor among
+  several.
+- **A person is a gate, not an owner.** An approval or a review is a verdict
+  about one exact snapshot, produced by a person instead of a program, keyed
+  and invalidated like every other verdict (§12.4). Where a team wants a
+  person, it places a gate; where it does not, nothing waits.
+
+### 12.2 Observations: the second `Fold` input
+
+```go
+type ObservationKind string
+const (
+    Deployment   ObservationKind = "Deployment"   // an environment's content changed
+    Verdict      ObservationKind = "Verdict"      // an Observed gate's result arrived
+    Completion   ObservationKind = "Completion"   // a step's work was done outside the task
+    TicketChange ObservationKind = "TicketChange" // the source ticket changed
+)
+
+type Observation struct {
+    Kind       ObservationKind
+    Source     string    // connector name; must be in policy.allowedObservationSources
+    Sequence   int64     // per (task, source), strictly increasing; gaps allowed
+    ObservedAt time.Time
+
+    Snapshot    string     // the task snapshot the fact is about. REQUIRED for
+                           // Deployment, Verdict, Completion; resolved by the connector
+    Environment string     // Deployment
+    Contains    bool       // Deployment: the environment now contains Snapshot
+    Gate        string     // Verdict: an Observed gate step
+    Result      GateResult // Verdict: Passed | Failed only
+    Action      string     // Completion: an Action step whose class allows it
+    Ref         string     // PR number, commit, release tag, approver, ticket id
+    Evidence    string     // capped at MaxEvidenceInline
+    EvidenceRef string
+    TicketState string     // TicketChange: open | closed
+}
+```
+
+`FoldObservation(v, o) → (View, error)` is pure like its sibling. Validation
+first; on error the returned view is unchanged:
+
+| Check | Error |
+|---|---|
+| `o.Sequence > v.Observed[o.Source]` | `ErrObservationReplay` |
+| `Verdict`: `o.Gate` names a plan gate whose class has `executor: Observed`, and `o.Result ∈ {Passed, Failed}` | `ErrNotObservedGate`, `ErrInvalidVerdict` |
+| `Completion`: `o.Action` names a plan Action whose class sets `externallySatisfiable: true` | `ErrNotSatisfiable` |
+| `Deployment`: `o.Environment` is named by an environment gate in the plan | `ErrUnknownEnvironment` |
+
+Then `v.Observed[o.Source] = o.Sequence` and, by kind:
+
+| Kind | Effect on the view |
+|---|---|
+| `Deployment` | `Environments[env] = {Snapshot: o.Snapshot if o.Contains else "", Since: o.ObservedAt}`. Every environment gate on `env` loses its result: `Unknown` if the environment now contains the current snapshot, else `Waiting`. A redeploy that still contains the snapshot also clears it — the deployment, not only the code, is what the gate judged. This is the closed default (§6, invariant 6) applied to environments; its cost is re-verification when neighbours deploy. |
+| `Verdict` | If `o.Snapshot != v.CurrentSnapshot`: inert — recorded in `LastObservations`, gate untouched. A stale approval never passes a newer version. Otherwise the gate takes `Result = o.Result`, `VerifiedSnapshot = o.Snapshot`, evidence copied. A `Failed` verdict on a blocking gate takes the ordinary failure path in `Decide`: fix action if the class names one, else the driver with the verdict's evidence — a review's requested changes are that evidence. |
+| `Completion` | If `o.Snapshot != v.CurrentSnapshot`: inert. Otherwise record a completion of `o.Action` at the current snapshot with `SatisfiedBy = o.Ref`: a person who merged by hand satisfied the `merge` step, and the walk proceeds past it. |
+| `TicketChange{closed}` | `v.Canceled = {o.Source, o.Ref, o.ObservedAt}`. The controller, not `Decide`, acts on it (§12.3): cancel the active execution, release the work namespace, terminal `Canceled`. Any other ticket edit is recorded and changes nothing: the goal is pinned (§3.4), and a materially different ticket is a new task. |
+
+Bounding: the view keeps `Observed` (one integer per source),
+`Environments` (one entry per environment the plan names), `Canceled`, and
+`LastObservations` (the latest observation per kind and subject). History
+goes to the projector (Appendix B).
+
+### 12.3 Connectors: sensors and actuators
+
+A connector is a component deployed outside the operator, by cluster
+administrators, with its own scoped credential. It has two duties and no
+authority.
+
+**Sensor.** Translate external events into observations. A connector never
+writes task status — the operator is the sole status writer (§6). It creates
+`AgentObservation` objects: a small namespaced kind, one per observation,
+owned by the task through an owner reference.
+
+```go
+type AgentObservationSpec struct {
+    TaskRef     corev1.LocalObjectReference
+    Observation Observation // §12.2; CEL-frozen after creation
+}
+
+type AgentObservationStatus struct {
+    Folded bool   // set by the task controller in the same write as the view
+    Error  string // validation error when rejected; never folded
+}
+```
+
+The task controller watches them through the owner reference, folds the
+unfolded observations of a task in `(Source, Sequence)` order — one per
+reconcile, in the same status write as the view, exactly as it folds step
+results — marks each `Folded`, and reaps it after a TTL. The trigger is a
+plain watch, the audit trail is in the API, and garbage collection is the
+owner reference.
+
+Resolution is the connector's job. An observation about a version names the
+task's snapshot (a tree hash), never a commit, and the connector that knows
+the commit resolves it: a pull-request review names a head commit whose tree
+is the snapshot; a deployment names a commit that either contains the task's
+merge commit or does not. The operator never calls git, a tracker, a CD
+system, or anything else outside the API server.
+
+**Actuator.** Execute Actions whose class `executor` is `Http`. The
+`AgentStep` controller's `Http` executor posts the step's spec to the
+connector's endpoint with the execution ID as an idempotency key; the
+connector performs the operation with its own credential — open or update a
+pull request, merge, cut a release, file, annotate or close a ticket — and
+reports `State` (§5.3). `Ensure` semantics carry through unchanged: the
+connector deduplicates on execution ID, so a reconcile storm cannot merge
+twice or file a ticket twice. Actions of this kind leave the tree unchanged
+and report `ResultSnapshot == InputSnapshot` (a no-op mutation, §11.4); they
+return a `Ref` (the pull request, the merge commit, the tag) for sensors to
+correlate later.
+
+Webhooks are lossy, so every sensor also runs a reconciling sweep, as the
+paper specifies for the tracker (paper §11). Observations are idempotent by
+`(Source, Sequence)`, so a sweep that re-reports is harmless: a missed
+webhook costs latency, never correctness.
+
+| Connector | Senses | Actuates |
+|---|---|---|
+| Tracker | ticket created, edited, closed; new tasks from selection (§12.6) | create ticket, add detail, update status, close |
+| SCM / pull request | review verdicts, approvals, merges done by hand | open or update the pull request, merge |
+| Deploy / CD | a deployment or rollback landed in an environment | trigger a release |
+| Approvals | a named person's verdict on a named gate (a UI, a chat command, a pull-request review) | — |
+| Sources | schedules, scanner findings | create tasks (§12.6) |
+
+Trust boundary: `AgentClusterPolicy.allowedObservationSources` lists the
+connectors whose observations a namespace accepts; RBAC to create
+`AgentObservation` is granted to connector service accounts only (the agent's
+sandbox has no API access at all); observations are validated against schema,
+plan and sequence; and an observation can only ever change the view, never
+the plan. Connectors are administrator-owned like classes, so a compromised
+connector is a cluster incident, not a tenant escalation.
+
+### 12.4 Environment-scoped and Observed gates
+
+Gate classes gain `scope: Tree | Diff | Environment` (Appendix B reserved the
+first two) and gate executors gain `Observed`. A workflow step for an
+environment gate names its `environment`; any gate step may set `maxWait`.
+Both kinds introduce a gate state Phase 1 does not have: `Waiting`, distinct
+from `Unknown`, which `Decide` never schedules and never escalates on its
+own. A task whose decision is `Wait` accrues no active runtime — waiting on
+the world is not runtime, and the wall-clock budget pauses as it does under
+`Suspended` — while the gate's `Waited` clock runs. `maxWait` bounds it: a
+blocking gate that exceeds it escalates `stalled`, Phase 2's sixth
+termination reason; a non-blocking one is tolerated as R1 tolerates an
+unrunnable gate.
+
+**Environment gates** run against the deployed system — smoke checks,
+health, CPU and memory deltas, log assertions, the behaviour the ticket named
+— not against the sandbox.
+
+- **Key.** `(gate, environment, subjectSnapshot)`: the verdict is about the
+  deployment that contains this snapshot.
+- **Readiness.** Runnable only while `Environments[env].Snapshot ==
+  CurrentSnapshot` — what is deployed is what is judged. Otherwise `Waiting`.
+- **Invalidation.** By any `Deployment` observation on its environment
+  (§12.2) and by a change of the current snapshot, after which it is
+  `Waiting` until the new snapshot is deployed. Environment gates never carry
+  forward across snapshots: their subject is the deployment, not the tree.
+- **Failure.** Exactly as a blocking gate failure in the sandbox: fix action
+  first if the class names one (a rollback is a fix action whose result
+  leaves the tree unchanged), then the driver with the evidence. The fix
+  produces a new snapshot, and the `after` graph carries it back through
+  review, merge and deployment before the gate can run again.
+
+**Observed gates** have no executor run at all. Their verdict arrives as a
+`Verdict` observation naming the gate and the snapshot it judged; until it
+does, the gate is `Waiting`. A human approval, a pull-request review, an
+external CI status and a security scanner's finding are all Observed gates:
+the class says who may speak (`source`, a connector name), the workflow says
+where the gate stands, and the ledger gives the verdict per-snapshot
+validity under the gate's `invalidatedBy`. A `Failed` verdict carries its
+evidence into the ordinary failure path, so "address review comments" is not
+a feature: it is a blocking gate failing with the comments as evidence, and
+the driver's next run at the new snapshot updates the pull request through
+the `pull-request` Action (§12.5).
+
+### 12.5 Action triggers: retiring the single-action rule
+
+Phase 1 admits exactly one authored Action because rerun semantics were
+undefined (§3.3). The definition:
+
+```
+An Action a has a VALID COMPLETION at the current snapshot h iff the view
+records a completion of a whose snapshot is h — its own run, a carry-forward
+(below), or a Completion observation.
+
+a is RUNNABLE at h iff
+  (i)   a has no valid completion at h, and
+  (ii)  every predecessor p ∈ a.after is SATISFIED at h:
+          p a Gate    → Passed with VerifiedSnapshot h
+                        (environment gates: subjectSnapshot h)
+          p an Action → has a valid completion at h
+```
+
+- **Completions are keyed by snapshot and carry forward down the chain.**
+  Admission requires the Actions of a workflow to form a chain under `after`
+  (gates branch freely between them), so every Action has a position. When a
+  step produces a new snapshot — the driver, a fix action attributed to a
+  gate, or a tree-changing Action such as a docs writer — the completions of
+  Actions *before* the producing step in the chain are re-stamped to the new
+  snapshot; Actions after it must run again. The driver is first, so a driver
+  run invalidates every downstream completion: after a production failure
+  sends the driver back and produces `h6`, `pull-request`, `merge`, `release`
+  and `close` have no completion at `h6`, and each runs again once its
+  predecessors hold — the pull request is updated (or a new one opened when
+  the last was merged: the actuator's concern), reviewed, merged, deployed
+  and verified again. Every shipped snapshot walks the same ordered steps.
+- **The driver keeps its extra trigger.** It alone also runs on
+  `GateFailure`. Other Actions never run because something failed; they run
+  because their prerequisites hold, with trigger `Ready`. Fix actions are
+  unchanged (§4, step 5). Phase 1's `Initial` is `Ready` for a workflow with
+  one Action.
+- **Policy-gated Actions.** `merge` and `release` classes declare
+  `policyGate: Merge | Release`. `AgentClusterPolicy.mergePolicy` and
+  `releasePolicy` are `Manual | AutoOnGreen`: `Manual` injects an Observed
+  approval gate named `<action>-approval@policy` immediately before the
+  Action — blocking, `invalidatedBy: ["**"]`, injected like required gates
+  (§4, step 6) and equally unremovable; `AutoOnGreen` injects nothing.
+  `AutoWithSampledAudit` (Appendix B) is `AutoOnGreen` plus a post-merge
+  sampling connector. This is the autonomy dial as a mechanism: turning it
+  adds or removes one injected gate, and a workflow may only tighten it.
+- **Idempotency.** Every `Http` Action is idempotent per `(task, step,
+  snapshot, attempt)` through the execution ID (§3.5), which is what makes
+  "merge again after a fix" safe and "merge twice" impossible.
+
+The additions to `Decide` (§11.3), in the same notation:
+
+```
+Decide(p, v, b):
+  preamble += for step in p.Steps where Gate && Blocking:
+                if v.Gates[step].Result == Waiting
+                   && v.Gates[step].Waited > step.MaxWait → Escalate(ReasonStalled, step)
+
+  walk, per step in p.Steps:
+    Action a:  if validCompletion(a, v.CurrentSnapshot)   → continue
+               if every p ∈ a.After satisfied             → RunAction(a, Ready)
+               continue            # an unsatisfied predecessor was reached first
+                                   # and either scheduled or found Waiting
+    Gate g:    case Waiting:                              → continue
+               otherwise as §11.3; an environment gate is Unknown only while
+               ready (§12.4), an Observed gate is never RunGate
+
+  postamble: if any blocking gate is Waiting              → Wait(earliest deadline)
+  return Done
+```
+
+`Wait` is the fifth `Decision` type: the controller records the waiting step
+in a condition and requeues at the earliest `maxWait` deadline. `Done`
+therefore holds exactly when every Action in the plan has a valid completion
+at `h` (the terminal `close` included), every blocking gate is `Passed` with
+subject `h`, and every non-blocking gate is resolved, exhausted (R1) or past
+its `maxWait`. Phase 1's predicate is this one with a single Action and no
+environments.
+
+### 12.6 Task sources
+
+Tasks are created by connectors under policy, never by the agent:
+
+- **Tracker.** A ticket matching the namespace's selection (`Ref | Tag |
+  Auto | Default`, from trusted structured fields only, Appendix B) becomes
+  an `AgentTask` with the ticket as its goal and source.
+- **Schedules.** A `Schedule` source creates a task on a cron: a nightly
+  dependency update, a weekly security scan.
+- **Tasks that file tickets.** A scanner task's driver produces findings; a
+  `file-tickets` Action (`Http`, tracker actuator) creates tickets; the
+  tracker connector admits them as tasks under the *target* namespace's
+  policy. The agent files a ticket through the connector's credential and
+  validation; it never creates `AgentTask` or `AgentObservation` objects
+  (RBAC, §6).
+
+Runaway protection is policy, not optional:
+
+- every created task carries provenance labels
+  (`agents.primitive.dev/source`, `agents.primitive.dev/parent-task`) and a
+  `spawnDepth`; policy caps depth (default 2) and tasks per source per
+  window;
+- a task may not file a ticket that resolves to its own workflow and
+  repository unless the policy explicitly allows self-referential sources.
+
+### 12.7 The delta against the Phase 1 contract
+
+| Area | Phase 1 (§2–§11) | Phase 2 (this section) |
+|---|---|---|
+| `Fold` inputs | `ExecutionResult` | + `Observation` via `FoldObservation`, with a per-source sequence guard |
+| View | current snapshot, lineage, gates, actions, counters, spend | + `Environments`, `Observed`, `LastObservations`, `Canceled`; completions keyed by snapshot with `SatisfiedBy`; gate `Waiting` with `Waited` and `subjectSnapshot` |
+| `Decide` | driver once + on failure; gates when `Unknown` | + Action runnability with chain carry-forward (§12.5); gate readiness (§12.4); the `Wait` decision; `stalled` |
+| Triggers | `Initial`, `GateFailure`, `FixAction` | + `Ready` |
+| Kinds | five CRDs | + `AgentObservation`; `TrackerConnection` returns as one connector's configuration |
+| Classes | `scope` reserved; executors `Fake` (`SandboxExec`, `Job`, `Http` reserved) | `scope: Environment`; `executor: Observed` for gates and `Http` defined for Actions; `externallySatisfiable`, `policyGate`, `source` |
+| Workflow steps | `name, class, after, invalidatedBy` | + `environment`, `maxWait`; Actions form a chain |
+| `AgentStep` | resolved execution copied from the plan | + `environment`, so an environment executor knows where to run |
+| Policy | classes, required gates, ceilings, namespace template | + `allowedObservationSources`, `mergePolicy`, `releasePolicy`, spawn depth and rate caps |
+| Terminal states | `Succeeded`, `Failed` | + `Canceled` (ticket closed) |
+| Termination reasons | five | + `stalled` |
+| Security | §6 invariants | + connectors hold credentials, the sandbox never; observations validated, sequenced and source-allowlisted; the agent cannot create tasks or observations; spawn depth and rate caps |
+
+The pure core stays pure: `Fold` gains a second input type and `Decide` gains
+two predicates and one decision. Everything that touches the outside world
+lives in connectors and executors, where it can be replaced without touching
+the decision.
+
+---
+
 ## Appendix A — Changes from v1
 
 | # | v1 | v2 | Why |
@@ -2008,6 +2361,12 @@ enter the picture (§8, Steps 2–5).
 | 24 | Infra exhaustion escalated uniformly for any step | Escalates only where no fallback exists — the driver and blocking gates; an exhausted fix action degrades to the driver, an exhausted non-blocking gate is tolerated at `Done` (ruling R1) | Uniform escalation let a broken fixer, or a broken gate that by definition cannot block `Done`, kill a task that had a defined fallback |
 | 25 | Test coverage as a bullet list | §11: the normative package contract — exact types, `Fold` validation errors, glob dialect, Done predicate, an asserted termination bound, cases C01–C35, properties P1–P7 (including the world-model stale-green hunt), golden traces, fuzz targets | The bullets encoded decisions but not executable expectations; the pure core is the part worth validating exhaustively before Kubernetes enters |
 
+### v2.2 → v2.3 (the Phase 2 contract, §12)
+
+| # | v2.2 | v2.3 | Why |
+|---|---|---|---|
+| 26 | Lifecycle stages beyond the coding loop deferred to Appendix B by name only; the reconciler wakes on `AgentStep` results alone and admits one authored Action | §12: observations as a second `Fold` input; connectors as sensors and actuators outside the operator; environment-scoped and Observed gates with readiness, `Waiting` and `stalled`; Action runnability keyed by snapshot with chain carry-forward and policy-injected approval gates; task sources with spawn-depth and rate caps | The site describes a task running the whole lifecycle, but the spec had one trigger source and one Action, so merge, release, review, staging and production verification, and ticket creation were not expressible. No second orchestrator: the operator stays the only decider, and every Phase 1 rule is the special case of its generalization |
+
 ## Appendix B — Reserved concepts (deferred, not discarded)
 
 - **Diff-scoped gates (`scope: Diff`).** The suppression meta-gate judges the
@@ -2033,10 +2392,13 @@ enter the picture (§8, Steps 2–5).
   resolution path in the plan.
 - **Tracker connectors and workflow selection.** `Ref | Tag | Auto | Default`
   resolution from trusted structured fields only — never ticket free text,
-  which is writable by anyone with issue access, including the agent.
+  which is writable by anyone with issue access, including the agent. The
+  connector pattern itself (sensors and actuators) is designed in §12.3; task
+  sources in §12.6.
 - **Merge policies and sampled audit.** `Manual | AutoOnGreen |
   AutoWithSampledAudit`, with post-merge validation feeding failures back as
-  new gates.
+  new gates. Merge and release as policy-gated Actions, and staging and
+  production verification as environment gates, are designed in §12.4–12.5.
 - **Durable evidence store; Postgres projection** (gap-free: step finalizer
   released only after the append commits); **read API; UI; Kueue admission;
   real executors; git broker** (credentials never enter the sandbox — the

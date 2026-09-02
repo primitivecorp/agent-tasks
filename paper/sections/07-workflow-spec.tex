@@ -23,7 +23,9 @@
 %   default ["**"] (Section 6.2).
 % Exactly one authored action per workflow, the driver [impl]. Fix actions are
 %   synthesised at resolution as <gate>@fix, never authored; multi-action
-%   workflows return only with defined re-run semantics [spec].
+%   workflows return with the Phase 2 runnability rule [spec]: completions
+%   keyed by snapshot, carried forward down the action chain, so every shipped
+%   snapshot walks the same ordered steps (implementation.md section 12.5).
 % Include the minimal and the full example listings side by side. The full
 % listing should show the breadth a real loop carries -- gate classes: lint,
 % unit, integration with log assertions, cyclomatic complexity, CPU/memory

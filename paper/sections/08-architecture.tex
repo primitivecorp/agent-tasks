@@ -33,6 +33,13 @@
 % -> Succeeded, after the work namespace is observed gone); the finalizer is
 % the deletion path only. Suspend cancels the in-flight execution and retains
 % workspace and view; the wall-clock budget pauses.
+% Phase 2 [spec] keeps the one reconciler and adds a second \fold input:
+% observations (a deployment landed, a review or approval was given, a step
+% was done by hand, the ticket changed), written by connectors as
+% AgentObservation objects and folded in sequence order exactly like step
+% results. Sensors -> status -> reconcile -> actuators; the operator never
+% calls an external system, and connectors never decide
+% (implementation.md section 12).
 
 \subsection{Isolation and placement}
 % One work namespace per task: the isolation and networking boundary for
